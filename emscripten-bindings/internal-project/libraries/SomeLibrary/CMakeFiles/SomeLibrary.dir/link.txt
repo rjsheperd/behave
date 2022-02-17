@@ -1,0 +1,2 @@
+/emsdk/upstream/emscripten/emar qc libSomeLibrary.a  CMakeFiles/SomeLibrary.dir/src/some.cpp.o
+/emsdk/upstream/emscripten/emranlib libSomeLibrary.a

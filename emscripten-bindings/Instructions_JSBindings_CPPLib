@@ -1,0 +1,16 @@
+In SomeLibrary/ directory
+
+emcmake cmake .
+emmake make
+emmake make install
+
+
+In internal-project/ directory
+
+
+Compile the wrapper code to LLVM bitcode
+  emcc -c -std=c++11 -Ilibraries/SomeLibrary/install/include/SomeLibrary bind.cpp -o bind.bc
+
+
+Convert the bitcode for both the library and the wrapper to JavaScript
+  emcc --bind libraries/SomeLibrary/install/lib/libSomeLibrary.a bind.bc -o bind.js

@@ -1,0 +1,7 @@
+/src/internal-project/libraries/SomeLibrary/CMakeFiles/install/strip.dir
+/src/internal-project/libraries/SomeLibrary/CMakeFiles/install/local.dir
+/src/internal-project/libraries/SomeLibrary/CMakeFiles/install.dir
+/src/internal-project/libraries/SomeLibrary/CMakeFiles/list_install_components.dir
+/src/internal-project/libraries/SomeLibrary/CMakeFiles/rebuild_cache.dir
+/src/internal-project/libraries/SomeLibrary/CMakeFiles/edit_cache.dir
+/src/internal-project/libraries/SomeLibrary/CMakeFiles/SomeLibrary.dir

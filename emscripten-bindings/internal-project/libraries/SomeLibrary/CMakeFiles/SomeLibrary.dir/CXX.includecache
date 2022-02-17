@@ -1,0 +1,18 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/src/internal-project/libraries/SomeLibrary/src/some.cpp
+iostream
+-
+things.h
+/src/internal-project/libraries/SomeLibrary/src/things.h
+
+/src/internal-project/libraries/SomeLibrary/src/things.h
+string
+-
+

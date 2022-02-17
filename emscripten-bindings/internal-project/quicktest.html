@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  </head>
+  <body>
+    <h1 id="header">Spread Rate</h1>
+    <p id="greeting">Greetings</p>
+  </body>
+  <script>
+    var Module = {
+      onRuntimeInitialized: function() {
+        console.log('Test result: ');
+        Module.myprint();
+        document.getElementById("greeting").innerHTML = Module.getSpreadRate();
+      }
+    };
+  </script>
+  <script src="bind.js"></script>
+</html>

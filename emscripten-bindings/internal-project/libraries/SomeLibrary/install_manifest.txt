@@ -1,0 +1,6 @@
+/src/internal-project/libraries/SomeLibrary/install/lib/libSomeLibrary.a
+/src/internal-project/libraries/SomeLibrary/install/include/SomeLibrary/some.h
+/src/internal-project/libraries/SomeLibrary/install/cmake/SomeLibraryTargets.cmake
+/src/internal-project/libraries/SomeLibrary/install/cmake/SomeLibraryTargets-noconfig.cmake
+/src/internal-project/libraries/SomeLibrary/install/cmake/SomeLibraryConfig.cmake
+/src/internal-project/libraries/SomeLibrary/install/cmake/SomeLibraryConfigVersion.cmake
