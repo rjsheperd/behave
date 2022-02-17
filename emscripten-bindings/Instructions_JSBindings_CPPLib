@@ -14,3 +14,24 @@ Compile the wrapper code to LLVM bitcode
 
 Convert the bitcode for both the library and the wrapper to JavaScript
   emcc --bind libraries/SomeLibrary/install/lib/libSomeLibrary.a bind.bc -o bind.js
+
+
+** RJ's WebIDL equivalent **
+/emscripten/tools/webidl_binder palmettoGallberry.idl glue
+emcc wrapper.cpp -s WASM=0 -s EXPORTED_FUNCTIONS=["_malloc","_free"] --post-js glue.js -o behave.js
+
+
+emcc EmScriptBinding.cpp my_glue_wrapper.cpp --post-js glue.js -o output.js
+In file included from my_glue_wrapper.cpp:2:
+./glue.cpp:8:40: error: unknown type name 'size_t'
+EM_JS(void, array_bounds_check_error, (size_t idx, size_t size), {
+                                       ^
+./glue.cpp:8:52: error: unknown type name 'size_t'
+EM_JS(void, array_bounds_check_error, (size_t idx, size_t size), {
+
+
+/emscripten/tools/webidl_binder my_classes.idl glue
+emcc EmScriptBinding.cpp -s WASM=0 -s EXPORTED_FUNCTIONS=["_malloc","_free"] my_glue_wrapper.cpp --post-js glue.js -o output.js
+emcc my_glue_wrapper.cpp -s WASM=0 -s EXPORTED_FUNCTIONS=["_malloc","_free"]  --post-js glue.js -o output.js
+
+

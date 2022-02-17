@@ -1,0 +1,40 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/behave.dir/src/behave/Contain.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/ContainAdapter.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/ContainForce.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/ContainForceAdapter.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/ContainResource.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/ContainSim.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/EmScriptBinding.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/behaveRun.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/behaveUnits.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/crown.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/crownInputs.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/fireSize.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/fuelModelSet.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/ignite.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/igniteInputs.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/newext.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/palmettoGallberry.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/randfuel.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/randthread.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/safety.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/spot.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/spotInputs.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/surface.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/surfaceFire.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/surfaceFireReactionIntensity.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/surfaceFuelbedIntermediates.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/surfaceInputs.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/surfaceTwoFuelModels.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/westernAspen.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/windAdjustmentFactor.cpp.o"
+  "CMakeFiles/behave.dir/src/behave/windSpeedUtility.cpp.o"
+  "behave.js"
+  "behave.pdb"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/behave.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()
