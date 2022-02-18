@@ -102,7 +102,7 @@ add_library(behave STATIC ${SOURCE} ${HEADERS})
 add_custom_command(
   OUTPUT behave.js
   COMMAND emcc ${WRAPPER_FILE} ${EMCC_JS_ARGS} -o behave.js
-  DEPENDS libbehave.a
+  DEPENDS behave
   COMMENT "Building javascript"
   VERBATIM)
 add_custom_target(behave-javascript ALL DEPENDS behave.js)
