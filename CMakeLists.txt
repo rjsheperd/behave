@@ -1,40 +1,35 @@
+cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
-# ****************************************************************************/
-# This is set to 2.8.11 to use the target_link_libraries command. In CMake 
-# 2.8.11 and later versions, this command automatically adds appropriate 
-# include directories, compile definitions, the position-independent-code flag, 
-# and links to the qtmain.lib library on Windows.
-# *****************************************************************************
+# Emscripten Compilation
+set(WRAPPER_FILE ${CMAKE_CURRENT_SOURCE_DIR}/wrapper.cpp)
+set(GLUE_CPP_FILE ${CMAKE_CURRENT_SOURCE_DIR}/glue.cpp)
+set(GLUE_JS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/glue.js)
+set(BEHAVE_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/behave/)
+set(BEHAVE_LIB libbehave.a)
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.11)
+set(EMCC_ARGS
+  -I${BEHAVE_SRC_DIR}
+  -I${GLUE_CPP_FILE}
+  -L${BEHAVE_LIB}
+  --post-js ${GLUE_JS_FILE}
+  -s EXPORTED_FUNCTIONS=["_malloc","_free"]
+  -s EXPORTED_RUNTIME_METHODS=["UTF8ToString"]
+  -s EXTRA_EXPORTED_RUNTIME_METHODS=["addFunction"])
+
+set(EMCC_JS_ARGS ${EMCC_ARGS} -s WASM=0)
+
+set(EMCC_WASM_ARGS ${EMCC_ARGS}
+  -s BINARYEN_IGNORE_IMPLICIT_TRAPS=1
+  -s WASM=1)
 
 # Make use of c++11
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
-PROJECT(behave)
+project(behave LANGUAGES CXX)
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src/behave
-                    ${CMAKE_SOURCE_DIR}/src/cli)      
+include_directories(${CMAKE_SOURCE_DIR}/src/behave)
 
-OPTION(RAWS_BATCH "Enable Behave RAWS Data Batch Reader" OFF)
-IF(RAWS_BATCH)
-    ADD_DEFINITIONS(-DRAWS_BATCH)
-ENDIF()
-
-OPTION(TEST_BEHAVE "Enable Testing" OFF)
-IF(TEST_BEHAVE)
-    ADD_DEFINITIONS(-DTEST_BEHAVE)
-ENDIF()
-
-# Commented out OpenMP requirement for now
-#Make sure OpenMP is supported by compiler
-#FIND_PACKAGE(OpenMP REQUIRED)
-#IF(OPENMP_FOUND)
-#    SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-#    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-#ENDIF(OPENMP_FOUND)
-
-SET(SOURCE
+set(SOURCE
     src/behave/behaveRun.cpp
     src/behave/behaveUnits.cpp
     src/behave/Contain.cpp
@@ -66,7 +61,7 @@ SET(SOURCE
     src/behave/windAdjustmentFactor.cpp
     src/behave/windSpeedUtility.cpp)
 
-SET(HEADERS
+set(HEADERS
     src/behave/behaveRun.h
     src/behave/behaveUnits.h
     src/behave/Contain.h
@@ -98,64 +93,16 @@ SET(HEADERS
     src/behave/windAdjustmentFactor.h
     src/behave/windSpeedUtility.h)
 
-SOURCE_GROUP("Behave Core Source Files" FILES ${SOURCE})
+source_group("Behave Core Source Files" FILES ${SOURCE})
 
-SOURCE_GROUP("Behave Core Header Files" FILES ${HEADERS})
+source_group("Behave Core Header Files" FILES ${HEADERS})
 
-ADD_EXECUTABLE(behave 
-    ${SOURCE} 
-    src/behave/client.cpp 
-    ${HEADERS})
+add_library(behave STATIC ${SOURCE} ${HEADERS})
 
-IF(TEST_BEHAVE)
-    SET(Boost_DEBUG ON) # get verbose info while trying to find Boost 
-    SET(Boost_USE_STATIC_LIBS ON) # only find static libs
-
-    FIND_PACKAGE(Boost REQUIRED)
-    IF(Boost_FOUND)
-        FIND_PACKAGE(Boost 1.61.0 
-            COMPONENTS unit_test_framework REQUIRED)
-        INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
-        SET(LINK_LIBS ${Boost_LIBRARIES})
-        SET(BOOST_TEST_SOURCE
-            src/testBehave/testBehave.cpp)
-        ADD_EXECUTABLE(testBehave 
-            ${SOURCE}
-            ${BOOST_TEST_SOURCE}
-            ${HEADERS})
-        TARGET_LINK_LIBRARIES(testBehave ${Boost_LIBRARIES})
-    ENDIF()
-ENDIF()
-
-IF(RAWS_BATCH)
-    ADD_EXECUTABLE(behave-raws-batch
-        ${SOURCE}
-        src/rawsBatch/behaveRawsBatch.cpp
-        ${HEADERS})
-ENDIF()
-
-# optional stand-alone executables
-option(COMPUTE_SPOT_PILE "Build pile spot fire distance calculator" OFF)
-option(COMPUTE_SPOT_SURFACE "Build surface spot fire distance calculator" OFF)
-option(COMPUTE_SPOT_TORCHING_TREES "Build torching tree spot fire distance calculator" OFF)
-
-IF(COMPUTE_SPOT_PILE)
-    ADD_EXECUTABLE(compute_spot_distance_pile
-        ${SOURCE}
-        src/spotDistancePile/computePileSpottingDistance.cpp
-        ${HEADERS})
-ENDIF()
-
-IF(COMPUTE_SPOT_SURFACE)
-    ADD_EXECUTABLE(compute_spot_distance_surface
-        ${SOURCE}
-        src/spotDistanceSurface/computeSurfaceSpottingDistance.cpp
-        ${HEADERS})
-ENDIF()
-
-IF(COMPUTE_SPOT_TORCHING_TREES)
-    ADD_EXECUTABLE(compute_spot_distance_trees
-        ${SOURCE}
-        src/spotDistanceTorchingTrees/computeTorchingTreesSpottingDistance.cpp
-        ${HEADERS})
-ENDIF()
+add_custom_command(
+  OUTPUT behave.js
+  COMMAND emcc ${WRAPPER_FILE} ${EMCC_JS_ARGS} -o behave.js
+  DEPENDS libbehave.a
+  COMMENT "Building javascript"
+  VERBATIM)
+add_custom_target(behave-javascript ALL DEPENDS behave.js)

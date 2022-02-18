@@ -1,7 +1,7 @@
 /******************************************************************************
 *
 * Project:  CodeBlocks
-* Purpose:  Interface for Behave application based on the Facade OOP Design 
+* Purpose:  Interface for Behave application based on the Facade OOP Design
 *           Pattern used to tie together the modules and objects used by Behave
 * Author:   William Chatham <wchatham@fs.fed.us>
 *
@@ -44,18 +44,18 @@ class BehaveRun
 public:
     BehaveRun() = delete; // There is no default constructor
     explicit BehaveRun(FuelModelSet& fuelModelSet);
-    
+
     BehaveRun(const BehaveRun& rhs);
     BehaveRun& operator=(const BehaveRun& rhs);
     ~BehaveRun();
 
     // FuelModelSet Methods
     bool isFuelModelDefined(int fuelModelNumber) const;
-	double getFuelLoadOneHour(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
-	double getFuelLoadTenHour(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
-	double getFuelLoadHundredHour(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
-	double getFuelLoadLiveHerbaceous(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
-	double getFuelLoadLiveWoody(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
+    double getFuelLoadOneHour(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
+    double getFuelLoadTenHour(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
+    double getFuelLoadHundredHour(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
+    double getFuelLoadLiveHerbaceous(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
+    double getFuelLoadLiveWoody(int fuelModelNumber, LoadingUnits::LoadingUnitsEnum loadingUnits) const;
 
     void setFuelModelSet(FuelModelSet& fuelModelSet);
     void reinitialize();

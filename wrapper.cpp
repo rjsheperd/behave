@@ -1,0 +1,5 @@
+#include "ContainResource.cpp"
+#include "palmettoGallberry.cpp"
+#include "westernAspen.cpp"
+#include "windSpeedUtility.cpp"
+#include "glue.cpp"

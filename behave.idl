@@ -1,0 +1,66 @@
+enum Sem_ContainFlank {
+  "Sem::LeftFlank", "Sem::RightFlank", "Sem::BothFlanks", "Sem::NeitherFlank"
+};
+
+[Prefix = "Sem::"]
+interface ContainResource {
+  void ContainResource(double arrival, double production, double duration, Sem_ContainFlank flank, DOMString desc, double baseCost, double hourCost);
+  DOMString description();
+  void print([Ref] byte buf, long buflen);
+  double arrival();
+  double hourCost();
+  double duration();
+  double production();
+  double baseCost();
+  Sem_ContainFlank flank();
+};
+
+interface PalmettoGallberry {
+  void initializeMembers();
+  void PalmettoGallberry();
+  double getHeatOfCombustionLive();
+  double calculatePalmettoGallberyLitterLoad(double ageOfRough, double overstoryBasalArea);
+  double getPalmettoGallberyLiveOneHourLoad();
+  double getPalmettoGallberyDeadFoliageLoad();
+  double getHeatOfCombustionDead();
+  double calculatePalmettoGallberyLiveFoliageLoad(double ageOfRough, double palmettoCoverage, double heightOfUnderstory);
+  double calculatePalmettoGallberyLiveTenHourLoad(double ageOfRough, double heightOfUnderstory);
+  double getPalmettoGallberyDeadTenHourLoad();
+  double getMoistureOfExtinctionDead();
+  double getPalmettoGallberyLiveFoliageLoad();
+  double getPalmettoGallberyLitterLoad();
+  double calculatePalmettoGallberyDeadTenHourLoad(double ageOfRough, double palmettoCoverage);
+  double calculatePalmettoGallberyLiveOneHourLoad(double ageOfRough, double heightOfUnderstory);
+  double getPalmettoGallberyFuelBedDepth();
+  double calculatePalmettoGallberyDeadFoliageLoad(double ageOfRough, double palmettoCoverage);
+  double calculatePalmettoGallberyDeadOneHourLoad(double ageOfRough, double heightOfUnderstory);
+  double getPalmettoGallberyLiveTenHourLoad();
+  double getPalmettoGallberyDeadOneHourLoad();
+  double calculatePalmettoGallberyFuelBedDepth(double heightOfUnderstory);
+};
+
+interface WesternAspen {
+  void WesternAspen();
+  void initializeMembers();
+  double calculateAspenMortality(long severity, double flameLength, double DBH);
+  double getAspenDBH();
+  double getAspenFuelBedDepth(long typeIndex);
+  double getAspenHeatOfCombustionDead();
+  double getAspenHeatOfCombustionLive();
+  double getAspenLoadDeadOneHour(long aspenFuelModelNumber, double aspenCuringLevel);
+  double getAspenLoadDeadTenHour(long aspenFuelModelNumber);
+  double getAspenLoadLiveHerbaceous(long aspenFuelModelNumber, double aspenCuringLevel);
+  double getAspenLoadLiveWoody(long aspenFuelModelNumber, double aspenCuringLevel);
+  double getAspenMoistureOfExtinctionDead();
+  double getAspenMortality();
+  double getAspenSavrDeadOneHour(long aspenFuelModelNumber, double aspenCuringLevel);
+  double getAspenSavrDeadTenHour();
+  double getAspenSavrLiveHerbaceous();
+  double getAspenSavrLiveWoody(long aspenFuelModelNumber, double aspenCuringLevel);
+};
+
+interface WindSpeedUtility {
+  void WindSpeedUtility();
+  double windSpeedAtMidflame(double windSpeedAtTwentyFeet, double windAdjustmentFactor);
+  double windSpeedAtTwentyFeetFromTenMeter(double windSpeedAtTenMeters);
+};

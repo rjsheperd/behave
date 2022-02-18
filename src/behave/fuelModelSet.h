@@ -45,7 +45,7 @@ public:
     FuelModelSet& operator=(const FuelModelSet& rhs);
     FuelModelSet(const FuelModelSet& rhs);
     ~FuelModelSet();
-   
+
     bool setCustomFuelModel(int fuelModelNumberIn, std::string code, std::string name,
         double fuelBedDepth, LengthUnits::LengthUnitsEnum lengthUnits, double moistureOfExtinctionDead,
         MoistureUnits::MoistureUnitsEnum moistureUnits, double heatOfCombustionDead, double heatOfCombustionLive,
@@ -86,7 +86,7 @@ private:
 
     struct FuelModelRecord
     {
-        int fuelModelNumber_;               // Standard ID number for fuel model 
+        int fuelModelNumber_;               // Standard ID number for fuel model
         std::string code_;                  // Fuel model code, usually 2 letters followed by number,(e.g., "GR1")
         std::string name_;                  // Fuel model name, (e.g., "Humid Climate Grass")
         double fuelbedDepth_;               // Fuelbed depth in feet

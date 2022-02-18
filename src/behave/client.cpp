@@ -106,7 +106,7 @@ int main()
     //crownRatio = 0.50;
 
     //// Single fuel model test
-    //behave.updateSurfaceInputs(fuelModelNumber, moistureOneHour, moistureTenHour, moistureHundredHour, moistureLiveHerbaceous, moistureLiveWoody, 
+    //behave.updateSurfaceInputs(fuelModelNumber, moistureOneHour, moistureTenHour, moistureHundredHour, moistureLiveHerbaceous, moistureLiveWoody,
     //    MoistureUnits::PERCENT, windSpeed, windSpeedUnits, windHeightInputMode, windDirection, windAndSpreadOrientationMode, slope, SlopeUnits::DEGREES,
     //    aspect, canopyCover, canopyHeight, canopyHeightUnits, crownRatio);
     //behave.doSurfaceRunInDirectionOfInterest(directionOfInterest);
