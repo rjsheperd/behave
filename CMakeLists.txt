@@ -13,8 +13,7 @@ set(EMCC_ARGS
   -L${BEHAVE_LIB}
   --post-js ${GLUE_JS_FILE}
   -s EXPORTED_FUNCTIONS=["_malloc","_free"]
-  -s EXPORTED_RUNTIME_METHODS=["UTF8ToString"]
-  -s EXTRA_EXPORTED_RUNTIME_METHODS=["addFunction"])
+  -s EXPORTED_RUNTIME_METHODS=["UTF8ToString","allocateUTF8","addFunction"])
 
 set(EMCC_JS_ARGS ${EMCC_ARGS} -s WASM=0)
 
@@ -59,7 +58,8 @@ set(SOURCE
     src/behave/surfaceTwoFuelModels.cpp
     src/behave/westernAspen.cpp
     src/behave/windAdjustmentFactor.cpp
-    src/behave/windSpeedUtility.cpp)
+    src/behave/windSpeedUtility.cpp
+    src/behave/worksheet.cpp)
 
 set(HEADERS
     src/behave/behaveRun.h
@@ -91,7 +91,8 @@ set(HEADERS
     src/behave/surfaceTwoFuelModels.h
     src/behave/westernAspen.h
     src/behave/windAdjustmentFactor.h
-    src/behave/windSpeedUtility.h)
+    src/behave/windSpeedUtility.h
+    src/behave/worksheet.cpp)
 
 source_group("Behave Core Source Files" FILES ${SOURCE})
 

@@ -208,6 +208,13 @@ Module['VoidPtr'] = VoidPtr;
   else desc = ensureString(desc);
   if (baseCost && typeof baseCost === 'object') baseCost = baseCost.ptr;
   if (hourCost && typeof hourCost === 'object') hourCost = hourCost.ptr;
+  if (arrival === undefined) { this.ptr = _emscripten_bind_ContainResource_ContainResource_0(); getCache(ContainResource)[this.ptr] = this;return }
+  if (production === undefined) { this.ptr = _emscripten_bind_ContainResource_ContainResource_1(arrival); getCache(ContainResource)[this.ptr] = this;return }
+  if (duration === undefined) { this.ptr = _emscripten_bind_ContainResource_ContainResource_2(arrival, production); getCache(ContainResource)[this.ptr] = this;return }
+  if (flank === undefined) { this.ptr = _emscripten_bind_ContainResource_ContainResource_3(arrival, production, duration); getCache(ContainResource)[this.ptr] = this;return }
+  if (desc === undefined) { this.ptr = _emscripten_bind_ContainResource_ContainResource_4(arrival, production, duration, flank); getCache(ContainResource)[this.ptr] = this;return }
+  if (baseCost === undefined) { this.ptr = _emscripten_bind_ContainResource_ContainResource_5(arrival, production, duration, flank, desc); getCache(ContainResource)[this.ptr] = this;return }
+  if (hourCost === undefined) { this.ptr = _emscripten_bind_ContainResource_ContainResource_6(arrival, production, duration, flank, desc, baseCost); getCache(ContainResource)[this.ptr] = this;return }
   this.ptr = _emscripten_bind_ContainResource_ContainResource_7(arrival, production, duration, flank, desc, baseCost, hourCost);
   getCache(ContainResource)[this.ptr] = this;
 };;
@@ -219,12 +226,14 @@ Module['ContainResource'] = ContainResource;
 
 ContainResource.prototype['description'] = ContainResource.prototype.description = /** @suppress {undefinedVars, duplicate} @this{Object} */function() {
   var self = this.ptr;
-  return _emscripten_bind_ContainResource_description_0(self);
+  return UTF8ToString(_emscripten_bind_ContainResource_description_0(self));
 };;
 
 ContainResource.prototype['print'] = ContainResource.prototype.print = /** @suppress {undefinedVars, duplicate} @this{Object} */function(buf, buflen) {
   var self = this.ptr;
+  ensureCache.prepare();
   if (buf && typeof buf === 'object') buf = buf.ptr;
+  else buf = ensureString(buf);
   if (buflen && typeof buflen === 'object') buflen = buflen.ptr;
   _emscripten_bind_ContainResource_print_2(self, buf, buflen);
 };;
@@ -531,6 +540,81 @@ WindSpeedUtility.prototype['windSpeedAtTwentyFeetFromTenMeter'] = WindSpeedUtili
   WindSpeedUtility.prototype['__destroy__'] = WindSpeedUtility.prototype.__destroy__ = /** @suppress {undefinedVars, duplicate} @this{Object} */function() {
   var self = this.ptr;
   _emscripten_bind_WindSpeedUtility___destroy___0(self);
+};
+// Worksheet
+/** @suppress {undefinedVars, duplicate} @this{Object} */function Worksheet() {
+  this.ptr = _emscripten_bind_Worksheet_Worksheet_0();
+  getCache(Worksheet)[this.ptr] = this;
+};;
+Worksheet.prototype = Object.create(WrapperObject.prototype);
+Worksheet.prototype.constructor = Worksheet;
+Worksheet.prototype.__class__ = Worksheet;
+Worksheet.__cache__ = {};
+Module['Worksheet'] = Worksheet;
+
+Worksheet.prototype['addContinuousVar'] = Worksheet.prototype.addContinuousVar = /** @suppress {undefinedVars, duplicate} @this{Object} */function(name, value) {
+  var self = this.ptr;
+  ensureCache.prepare();
+  if (name && typeof name === 'object') name = name.ptr;
+  else name = ensureString(name);
+  if (value && typeof value === 'object') value = value.ptr;
+  if (value === undefined) { _emscripten_bind_Worksheet_addContinuousVar_1(self, name);  return }
+  _emscripten_bind_Worksheet_addContinuousVar_2(self, name, value);
+};;
+
+Worksheet.prototype['addDiscreteVar'] = Worksheet.prototype.addDiscreteVar = /** @suppress {undefinedVars, duplicate} @this{Object} */function(name, value) {
+  var self = this.ptr;
+  ensureCache.prepare();
+  if (name && typeof name === 'object') name = name.ptr;
+  else name = ensureString(name);
+  if (value && typeof value === 'object') value = value.ptr;
+  else value = ensureString(value);
+  if (value === undefined) { _emscripten_bind_Worksheet_addDiscreteVar_1(self, name);  return }
+  _emscripten_bind_Worksheet_addDiscreteVar_2(self, name, value);
+};;
+
+Worksheet.prototype['addTextVar'] = Worksheet.prototype.addTextVar = /** @suppress {undefinedVars, duplicate} @this{Object} */function(name, value) {
+  var self = this.ptr;
+  ensureCache.prepare();
+  if (name && typeof name === 'object') name = name.ptr;
+  else name = ensureString(name);
+  if (value && typeof value === 'object') value = value.ptr;
+  else value = ensureString(value);
+  if (value === undefined) { _emscripten_bind_Worksheet_addTextVar_1(self, name);  return }
+  _emscripten_bind_Worksheet_addTextVar_2(self, name, value);
+};;
+
+Worksheet.prototype['getTextVar'] = Worksheet.prototype.getTextVar = /** @suppress {undefinedVars, duplicate} @this{Object} */function(name, result) {
+  var self = this.ptr;
+  ensureCache.prepare();
+  if (name && typeof name === 'object') name = name.ptr;
+  else name = ensureString(name);
+  if (result && typeof result === 'object') result = result.ptr;
+  else result = ensureString(result);
+  _emscripten_bind_Worksheet_getTextVar_2(self, name, result);
+};;
+
+Worksheet.prototype['getDiscreteVar'] = Worksheet.prototype.getDiscreteVar = /** @suppress {undefinedVars, duplicate} @this{Object} */function(name, result) {
+  var self = this.ptr;
+  ensureCache.prepare();
+  if (name && typeof name === 'object') name = name.ptr;
+  else name = ensureString(name);
+  if (result && typeof result === 'object') result = result.ptr;
+  else result = ensureString(result);
+  _emscripten_bind_Worksheet_getDiscreteVar_2(self, name, result);
+};;
+
+Worksheet.prototype['getContinuousVar'] = Worksheet.prototype.getContinuousVar = /** @suppress {undefinedVars, duplicate} @this{Object} */function(name) {
+  var self = this.ptr;
+  ensureCache.prepare();
+  if (name && typeof name === 'object') name = name.ptr;
+  else name = ensureString(name);
+  return _emscripten_bind_Worksheet_getContinuousVar_1(self, name);
+};;
+
+  Worksheet.prototype['__destroy__'] = Worksheet.prototype.__destroy__ = /** @suppress {undefinedVars, duplicate} @this{Object} */function() {
+  var self = this.ptr;
+  _emscripten_bind_Worksheet___destroy___0(self);
 };
 (function() {
   function setupEnums() {

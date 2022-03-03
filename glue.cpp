@@ -25,6 +25,10 @@ typedef Sem::ContainFlank Sem_ContainFlank;
 
 // ContainResource
 
+Sem::ContainResource* EMSCRIPTEN_KEEPALIVE emscripten_bind_ContainResource_ContainResource_0() {
+  return new Sem::ContainResource();
+}
+
 Sem::ContainResource* EMSCRIPTEN_KEEPALIVE emscripten_bind_ContainResource_ContainResource_7(double arrival, double production, double duration, Sem_ContainFlank flank, char* desc, double baseCost, double hourCost) {
   return new Sem::ContainResource(arrival, production, duration, flank, desc, baseCost, hourCost);
 }
@@ -244,6 +248,52 @@ double EMSCRIPTEN_KEEPALIVE emscripten_bind_WindSpeedUtility_windSpeedAtTwentyFe
 }
 
 void EMSCRIPTEN_KEEPALIVE emscripten_bind_WindSpeedUtility___destroy___0(WindSpeedUtility* self) {
+  delete self;
+}
+
+// Worksheet
+
+Worksheet* EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_Worksheet_0() {
+  return new Worksheet();
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_addContinuousVar_1(Worksheet* self, char* name) {
+  self->addContinuousVar(name);
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_addContinuousVar_2(Worksheet* self, char* name, double value) {
+  self->addContinuousVar(name, value);
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_addDiscreteVar_1(Worksheet* self, char* name) {
+  self->addDiscreteVar(name);
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_addDiscreteVar_2(Worksheet* self, char* name, char* value) {
+  self->addDiscreteVar(name, value);
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_addTextVar_1(Worksheet* self, char* name) {
+  self->addTextVar(name);
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_addTextVar_2(Worksheet* self, char* name, char* value) {
+  self->addTextVar(name, value);
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_getTextVar_2(Worksheet* self, char* name, char* result) {
+  self->getTextVar(name, result);
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_getDiscreteVar_2(Worksheet* self, char* name, char* result) {
+  self->getDiscreteVar(name, result);
+}
+
+double EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet_getContinuousVar_1(Worksheet* self, char* name) {
+  return self->getContinuousVar(name);
+}
+
+void EMSCRIPTEN_KEEPALIVE emscripten_bind_Worksheet___destroy___0(Worksheet* self) {
   delete self;
 }
 
