@@ -1,6 +1,7 @@
 //------------------------------------------------------------------------------
-/*! \file ContainSim.h
+/*! \file SIGContainSim.h
     \author Copyright (C) 2006 by Collin D. Bevins.
+    \author Copyright (C) 2022 by Richard Sheperd, Spatial Informatics Group
     \license This is released under the GNU Public License 2.
     \brief An implementation of Freid and Fried (\ref friedfried1995)
     wildfire containment model.
@@ -62,34 +63,32 @@
 #define _CONTAINSIM_H_INCLUDED_
 
 // Custom include files
-#include "Contain.h"
-#include "ContainForce.h"
-#include "ContainResource.h"
-
-namespace Sem
-{
+#include "SIGContain.h"
+#include "SIGContainForce.h"
+#include "SIGContainResource.h"
+#include "SIGDiurnalROS.h"
 
 //------------------------------------------------------------------------------
-/*! \class ContainSim Contain.h
+/*! \class SIGContainSim
     \brief Fire containment simulation object.
 
     Contains all the information to make a complete simulation run,
     and when completed, display the fire perimeter in Cartesian coordinates.
  */
 
-class ContainSim
+class SIGContainSim
 {
 // Public methods
 public:
     // Custom constructor
-    ContainSim(
+    SIGContainSim(
         double reportSize,
         double reportRate,
-        double *diurnalROS,
+        SIGDiurnalROS *diurnalROS,
         int fireStartMinutesStartTime,
         double lwRatio=1.,
-        ContainForce *force=0,
-        Contain::ContainTactic tactic=Contain::HeadAttack,
+        SIGContainForce *force=0,
+        ContainTactic tactic=HeadAttack,
         double attackDist=0.,
         bool retry=true,
         int minSteps=250,
@@ -97,7 +96,7 @@ public:
         int maxFireSize=1000,
         int maxFireTime=1080) ;
     // Virtual destructor
-    ~ContainSim( void ) ;
+    ~SIGContainSim( void ) ;
 
     // Access to input properties
     double attackDistance( void ) const ;
@@ -114,11 +113,11 @@ public:
     double fireSizeAtReport( void ) const ;
     double fireSpreadRateAtBack( void ) const ;
     double fireSpreadRateAtReport( void ) const ;
-    ContainForce* force( void ) const ;
+    SIGContainForce* force( void ) const ;
     int maximumSimulationSteps( void ) const ;
     int minimumSimulationSteps( void ) const ;
-    Contain::ContainStatus status( void ) const ;
-    Contain::ContainTactic tactic( void ) const ;
+    ContainStatus status( void ) const ;
+    ContainTactic tactic( void ) const ;
 
     // Access to output properties
     double finalFireCost( void ) const ;
@@ -140,14 +139,14 @@ public:
     static void checkmem( const char* fileName, int lineNumber, void* ptr,
         const char* type, int size ) ;
 
-	// Calculate the area of the uncontained portion of the ellipse
-	double UncontainedArea( double head, double lwRatio, double x, double y, Sem::Contain::ContainTactic tactic  );	 // By DT 1/2013
+    // Calculate the area of the uncontained portion of the ellipse
+    double UncontainedArea( double head, double lwRatio, double x, double y, ContainTactic tactic);
 
 private:
     void finalStats( void ) ;
 
 // Protected data
-private:
+protected:
     double   m_finalCost;   //!< Final total cost of all resources used
     double   m_finalLine;   //!< Final fire line at containment or escape (ch)
     double   m_finalPerim;  //!< Final line plus fire perimeter at containment or escape (ch)
@@ -163,28 +162,26 @@ private:
     double  *m_y;           //!< Array of perimeter y coordinates (ch)
     double  *m_a;           //!< Array of flank area segments (ch2)
     double  *m_p;           //!< Array of flank perimeter segments (ch)
-    Contain *m_left;        //!< Left flank Contain object.
-    Contain *m_right;       //!< Right flank Contain object.
-    ContainForce *m_force;  //!< Containment forces for both flanks
+    SIGContain *m_left;     //!< Left flank Contain object.
+    SIGContain *m_right;    //!< Right flank Contain object.
+    SIGContainForce *m_force;  //!< Containment forces for both flanks
     int      m_minSteps;    //!< Minimum number of simulation distance steps
     int      m_maxSteps;    //!< Maximum number of simulation distance steps
     int      m_size;        //!< Size of the arrays (m_maxSteps or 2*m_maxSteps)
     int      m_pass;        //!< Pass number
     int      m_used;        //!< Number of containment resources deployed
     bool     m_retry;       //!< Retry with later attack time if forces overrun
-    int   m_maxFireSize;	//!< Maximum size a fire can burn before it escapes (acres)
-    int   m_maxFireTime;     //!< Maximum time a fire can burn before it escapes (minutes)
+    int   m_maxFireSize;    //!< Maximum size a fire can burn before it escapes (acres)
+    int   m_maxFireTime;    //!< Maximum time a fire can burn before it escapes (minutes)
 };
-
-}   // End of namespace Sem
 
 //Error codes
 #define INVALID_RESOURCE_TIME_ERROR  "Error: a resource can't have a negative production start time"
 
-
 #endif
 
 //------------------------------------------------------------------------------
-//  End of Contain.h
+//  End of SIGContain.h
 //------------------------------------------------------------------------------
+
 

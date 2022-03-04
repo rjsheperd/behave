@@ -12,6 +12,7 @@ set(EMCC_ARGS
   -I${GLUE_CPP_FILE}
   -L${BEHAVE_LIB}
   --post-js ${GLUE_JS_FILE}
+  -s NO_DISABLE_EXCEPTION_CATCHING
   -s EXPORTED_FUNCTIONS=["_malloc","_free"]
   -s EXPORTED_RUNTIME_METHODS=["UTF8ToString","allocateUTF8","addFunction"])
 
@@ -31,12 +32,12 @@ include_directories(${CMAKE_SOURCE_DIR}/src/behave)
 set(SOURCE
     src/behave/behaveRun.cpp
     src/behave/behaveUnits.cpp
-    src/behave/Contain.cpp
-    src/behave/ContainAdapter.cpp
-    src/behave/ContainForce.cpp
-    src/behave/ContainForceAdapter.cpp
-    src/behave/ContainResource.cpp
-    src/behave/ContainSim.cpp
+    src/behave/SIGContain.cpp
+    src/behave/SIGContainAdapter.cpp
+    src/behave/SIGContainForce.cpp
+    src/behave/SIGContainForceAdapter.cpp
+    src/behave/SIGContainResource.cpp
+    src/behave/SIGContainSim.cpp
     src/behave/crown.cpp
     src/behave/crownInputs.cpp
     src/behave/fireSize.cpp
@@ -58,18 +59,18 @@ set(SOURCE
     src/behave/surfaceTwoFuelModels.cpp
     src/behave/westernAspen.cpp
     src/behave/windAdjustmentFactor.cpp
-    src/behave/windSpeedUtility.cpp
-    src/behave/worksheet.cpp)
+    src/behave/windSpeedUtility.cpp)
 
 set(HEADERS
     src/behave/behaveRun.h
     src/behave/behaveUnits.h
-    src/behave/Contain.h
-    src/behave/ContainAdapter.h
-    src/behave/ContainForce.h
-    src/behave/ContainForceAdapter.h
-    src/behave/ContainResource.h
-    src/behave/ContainSim.h
+    src/behave/SIGDiurnalROS.h
+    src/behave/SIGContain.h
+    src/behave/SIGContainAdapter.h
+    src/behave/SIGContainForce.h
+    src/behave/SIGContainForceAdapter.h
+    src/behave/SIGContainResource.h
+    src/behave/SIGContainSim.h
     src/behave/crown.h
     src/behave/crownInputs.h
     src/behave/fireSize.h
@@ -91,8 +92,7 @@ set(HEADERS
     src/behave/surfaceTwoFuelModels.h
     src/behave/westernAspen.h
     src/behave/windAdjustmentFactor.h
-    src/behave/windSpeedUtility.h
-    src/behave/worksheet.cpp)
+    src/behave/windSpeedUtility.h)
 
 source_group("Behave Core Source Files" FILES ${SOURCE})
 

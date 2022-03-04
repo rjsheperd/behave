@@ -6,6 +6,7 @@
 *           modification with a C++ interface to be used in Behave-like
 *           applications
 * Author:   William Chatham <wchatham@fs.fed.us>
+* Author:   Richard Sheperd <rsheperd@sig-gis.com>
 *
 *******************************************************************************
 *
@@ -33,25 +34,26 @@
 
 #include <string>
 #include <vector>
-#include "ContainResource.h"
+#include "SIGContainResource.h"
 
-class ContainForceAdapter
+class SIGContainForceAdapter
 {
 public:
-    ContainForceAdapter();
-    ~ContainForceAdapter();
+    SIGContainForceAdapter();
+    ~SIGContainForceAdapter();
 
-    void addResource(Sem::ContainResource& resource);
+    void addResource(SIGContainResource& resource);
     void addResource(double arrival, double production, double duration,
-        Sem::ContainFlank flank, char * desc, double baseCost, double hourCost);
-    double firstArrival(Sem::ContainFlank flank) const;
+        ContainFlank flank, const char * desc, double baseCost, double hourCost);
+    double firstArrival(ContainFlank flank) const;
 
     int removeResourceAt(int index);
-    int removeResourceWithThisDesc(std::string desc);
-    int removeAllResourcesWithThisDesc(std::string desc);
+    int removeResourceWithThisDesc(const char * desc);
+    int removeAllResourcesWithThisDesc(const char * desc);
 
-    std::vector<Sem::ContainResource> resourceVector;
+    std::vector<SIGContainResource> resourceVector;
 private:
 };
 
 #endif // CONTAINFORCEADAPTER_H
+

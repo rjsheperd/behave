@@ -1,32 +1,32 @@
-#include "ContainForceAdapter.h"
+#include "SIGContainForceAdapter.h"
 
-ContainForceAdapter::ContainForceAdapter()
+SIGContainForceAdapter::SIGContainForceAdapter()
     :resourceVector(0)
 {
 }
 
-ContainForceAdapter::~ContainForceAdapter()
+SIGContainForceAdapter::~SIGContainForceAdapter()
 {
 }
 
-void ContainForceAdapter::addResource(Sem::ContainResource& resource)
+void SIGContainForceAdapter::addResource(SIGContainResource& resource)
 {
     resourceVector.push_back(resource);
 }
 
-void ContainForceAdapter::addResource(double arrival, double production, double duration,
-    Sem::ContainFlank flank, char * desc, double baseCost, double hourCost)
+void SIGContainForceAdapter::addResource(double arrival, double production, double duration,
+    ContainFlank flank, const char * desc, double baseCost, double hourCost)
 {
-    Sem::ContainResource resource(arrival, production, duration, flank, (char* const)desc, baseCost, hourCost);
+    SIGContainResource resource(arrival, production, duration, flank, desc, baseCost, hourCost);
     addResource(resource);
 }
 
-double ContainForceAdapter::firstArrival(Sem::ContainFlank flank) const
+double SIGContainForceAdapter::firstArrival(ContainFlank flank) const
 {
     double at = 99999999.0;
     for (int i = 0; i < resourceVector.size(); i++)
     {
-        if ((resourceVector[i].flank() == flank || resourceVector[i].flank() == Sem::BothFlanks)
+        if ((resourceVector[i].flank() == flank || resourceVector[i].flank() == BothFlanks)
             && resourceVector[i].arrival() < at)
         {
             at = resourceVector[i].arrival();
@@ -35,7 +35,7 @@ double ContainForceAdapter::firstArrival(Sem::ContainFlank flank) const
     return(at);
 }
 
-int ContainForceAdapter::removeResourceAt(int index)
+int SIGContainForceAdapter::removeResourceAt(int index)
 {
     int success = 1; // 1 means didn't find it
     if (index < resourceVector.size())
@@ -46,13 +46,13 @@ int ContainForceAdapter::removeResourceAt(int index)
     return success;
 }
 
-int ContainForceAdapter::removeResourceWithThisDesc(std::string desc)
+int SIGContainForceAdapter::removeResourceWithThisDesc(const char * desc)
 {
     std::string descriptionString;
     for (int i = 0; i < resourceVector.size(); i++)
     {
         descriptionString = resourceVector[i].description();
-        if (descriptionString == desc)
+        if (strcmp(descriptionString.c_str(), desc) == 0)
         {
             removeResourceAt(i);
             return 0; // success
@@ -62,7 +62,7 @@ int ContainForceAdapter::removeResourceWithThisDesc(std::string desc)
     return 1; // error
 }
 
-int ContainForceAdapter::removeAllResourcesWithThisDesc(std::string desc)
+int SIGContainForceAdapter::removeAllResourcesWithThisDesc(const char * desc)
 {
     int rc;
     int success = 1; // 1 means didn't find it
@@ -72,3 +72,4 @@ int ContainForceAdapter::removeAllResourcesWithThisDesc(std::string desc)
     }
     return success;
 }
+

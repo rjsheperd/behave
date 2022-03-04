@@ -3,8 +3,8 @@
 * Project:  CodeBlocks
 * Purpose:  Class for handling crown fire behavior
 * Author:   William Chatham <wchatham@fs.fed.us>
-* Credits:  Some of the code in the corresponding cpp file is, in part or in 
-*           whole, from BehavePlus5 source originally authored by Collin D. 
+* Credits:  Some of the code in the corresponding cpp file is, in part or in
+*           whole, from BehavePlus5 source originally authored by Collin D.
 *           Bevins and is used with or without modification.
 *
 *******************************************************************************
@@ -29,7 +29,7 @@
 ******************************************************************************/
 
 // TODO: Add unit conversions for energy and incorporate into calculateCrownCriticalSurfaceFireIntensity() - WMC 11/16
-// TODO: Allow for use case in which Crown is run completely without Surface, will involve allowing direct input of HPUA 
+// TODO: Allow for use case in which Crown is run completely without Surface, will involve allowing direct input of HPUA
 //       and surface flame length, as well as setting all other pertinent surface inputs in Crown's copy of Surface - WMC 11/16
 
 #ifndef CROWN_H
@@ -47,7 +47,7 @@ struct FireType
     {
         Surface = 0,    // surface fire with no torching or crown fire spread.
         Torching = 1,   // surface fire with torching.
-        ConditionalCrownFire = 2, // active crown fire possible if the fire transitions to the overstory        
+        ConditionalCrownFire = 2, // active crown fire possible if the fire transitions to the overstory
         Crowning = 3    // active crown fire, fire is spreading through the canopy.
     };
 };
@@ -62,6 +62,7 @@ public:
     Crown(const Crown &rhs);
     Crown& operator=(const Crown &rhs);
 
+    // Runner Functions
     void doCrownRunRothermel();
     void doCrownRunScottAndReinhardt();
     void initializeMembers();
@@ -73,7 +74,7 @@ public:
         WindHeightInputMode::WindHeightInputModeEnum windHeightInputMode, double windDirection,
         WindAndSpreadOrientationMode::WindAndSpreadOrientationModeEnum windAndSpreadOrientationMode,
         double slope, SlopeUnits::SlopeUnitsEnum slopeUnits, double aspect, double canopyCover, CoverUnits::CoverUnitsEnum coverUnits,
-        double canopyHeight, double canopyBaseHeight, LengthUnits::LengthUnitsEnum canopyHeightUnits, double crownRatio, 
+        double canopyHeight, double canopyBaseHeight, LengthUnits::LengthUnitsEnum canopyHeightUnits, double crownRatio,
         double canopyBulkDensity, DensityUnits::DensityUnitsEnum densityUnits);
     void setCanopyBaseHeight(double canopyBaseHeight, LengthUnits::LengthUnitsEnum canopyHeightUnits);
     void setCanopyBulkDensity(double canopyBulkDensity, DensityUnits::DensityUnitsEnum densityUnits);
@@ -99,10 +100,10 @@ public:
 
     // SURFACE Module Inputs Setters
     void updateCrownsSurfaceInputs(int fuelModelNumber, double moistureOneHour, double moistureTenHour, double moistureHundredHour,
-        double moistureLiveHerbaceous, double moistureLiveWoody, MoistureUnits::MoistureUnitsEnum moistureUnits, double windSpeed, 
+        double moistureLiveHerbaceous, double moistureLiveWoody, MoistureUnits::MoistureUnitsEnum moistureUnits, double windSpeed,
         SpeedUnits::SpeedUnitsEnum windSpeedUnits, WindHeightInputMode::WindHeightInputModeEnum windHeightInputMode, double windDirection,
-        WindAndSpreadOrientationMode::WindAndSpreadOrientationModeEnum windAndSpreadOrientationMode, double slope, 
-        SlopeUnits::SlopeUnitsEnum slopeUnits, double aspect, double canopyCover, CoverUnits::CoverUnitsEnum coverUnits, double canopyHeight, 
+        WindAndSpreadOrientationMode::WindAndSpreadOrientationModeEnum windAndSpreadOrientationMode, double slope,
+        SlopeUnits::SlopeUnitsEnum slopeUnits, double aspect, double canopyCover, CoverUnits::CoverUnitsEnum coverUnits, double canopyHeight,
         LengthUnits::LengthUnitsEnum canopyHeightUnits, double crownRatio);
     void setCanopyCover(double canopyCover, CoverUnits::CoverUnitsEnum coverUnits);
     void setCanopyHeight(double canopyHeight, LengthUnits::LengthUnitsEnum canopyHeightUnits);
@@ -141,7 +142,7 @@ public:
 private:
     const FuelModelSet* fuelModelSet_;
     CrownInputs crownInputs_;
-    
+
     // SURFACE module components
     Surface surfaceFuel_;
     Surface crownFuel_;
@@ -176,7 +177,7 @@ private:
     FireType::FireTypeEnum fireType_;               // Classification based on corwn fire active and transition ratios
     double surfaceFireHeatPerUnitArea_;             // Surface fire hpua used for parallel surface runs (Btu/ft^2)
     double surfaceFirelineIntensity_;               // Surface fireline intensity used for parallel surface runs
-    double surfaceFireSpreadRate_;                      
+    double surfaceFireSpreadRate_;
     double surfaceFireFlameLength_;
     double surfaceFireCriticalSpreadRate_;
     double crownFuelLoad_;                          // Crown fire fuel load (lb / ft^2)
