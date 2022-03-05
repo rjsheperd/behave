@@ -52,7 +52,7 @@ public:
         TimeUnits::TimeUnitsEnum timeUnit,
         double productionRate,
         SpeedUnits::SpeedUnitsEnum productionRateUnits,
-        char * description = "",
+        const char * description = "",
         double baseCost = 0.0,
         double hourCost = 0.0);
     int removeResourceAt(int index);

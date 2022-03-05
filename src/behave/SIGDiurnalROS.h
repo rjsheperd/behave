@@ -15,14 +15,14 @@ public:
     ~SIGDiurnalROS() {};
 
     void push(double v) { diurnalROS.push_back(v); };
-    double at(int i) const { return diurnalROS[i]; };
-    double& get(int i) { return diurnalROS[i]; };
+    double at(int i) const { if (i < size()) return diurnalROS[i]; };
+    double& get(int i) { if (i < size()) return diurnalROS[i]; };
     double operator [] (int i) const { return at(i); }
     double& operator [] (int i){ return get(i); }
 
     void swap(int i, double v) { diurnalROS[i] = v; };
 
-    int size( void ) { return diurnalROS.size(); };
+    int size( void ) const { return diurnalROS.size(); };
 
 private:
     std::vector<double> diurnalROS;

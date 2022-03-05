@@ -68,7 +68,7 @@ void SIGContainAdapter::addResource(SIGContainResource& resource)
 }
 
 void SIGContainAdapter::addResource(double arrival, double duration, TimeUnits::TimeUnitsEnum timeUnits, double productionRate, SpeedUnits::SpeedUnitsEnum productionRateUnits,
-    char * description, double baseCost, double hourCost)
+    const char * description, double baseCost, double hourCost)
 {
     ContainFlank myflank = LeftFlank; // Currently only attacking left flanks is used, production is halved, left flank is mirrored
 

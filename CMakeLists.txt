@@ -19,6 +19,8 @@ set(EMCC_ARGS
 set(EMCC_JS_ARGS ${EMCC_ARGS} -s WASM=0)
 
 set(EMCC_WASM_ARGS ${EMCC_ARGS}
+  -O2
+  --closure 1
   -s BINARYEN_IGNORE_IMPLICIT_TRAPS=1
   -s WASM=1)
 
@@ -49,8 +51,8 @@ set(SOURCE
     src/behave/randfuel.cpp
     src/behave/randthread.cpp
     src/behave/safety.cpp
-    src/behave/spot.cpp
-    src/behave/spotInputs.cpp
+    src/behave/SIGSpot.cpp
+    src/behave/SIGSpotInputs.cpp
     src/behave/surface.cpp
     src/behave/surfaceFireReactionIntensity.cpp
     src/behave/surfaceFuelbedIntermediates.cpp
@@ -82,8 +84,8 @@ set(HEADERS
     src/behave/randfuel.h
     src/behave/randthread.h
     src/behave/safety.h
-    src/behave/spot.h
-    src/behave/spotInputs.h
+    src/behave/SIGSpot.h
+    src/behave/SIGSpotInputs.h
     src/behave/surface.h
     src/behave/surfaceFireReactionIntensity.h
     src/behave/surfaceFuelbedIntermediates.h
@@ -107,3 +109,11 @@ add_custom_command(
   COMMENT "Building javascript"
   VERBATIM)
 add_custom_target(behave-javascript ALL DEPENDS behave.js)
+
+add_custom_command(
+  OUTPUT behave.wasm
+  COMMAND emcc ${WRAPPER_FILE} ${EMCC_WASM_ARGS} -o behave-min.js
+  DEPENDS behave
+  COMMENT "Building webassembly"
+  VERBATIM)
+add_custom_target(behave-webassembly ALL DEPENDS behave.wasm)

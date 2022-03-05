@@ -6,6 +6,8 @@
 #include "SIGContain.cpp"
 #include "SIGContainSim.cpp"
 #include "SIGContainAdapter.cpp"
+#include "SIGSpotInputs.cpp"
+#include "SIGSpot.cpp"
 #include "palmettoGallberry.cpp"
 #include "westernAspen.cpp"
 #include "windSpeedUtility.cpp"
