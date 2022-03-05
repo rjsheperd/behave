@@ -6,6 +6,8 @@
 #include "SIGContain.cpp"
 #include "SIGContainSim.cpp"
 #include "SIGContainAdapter.cpp"
+#include "SIGIgniteInputs.cpp"
+#include "SIGIgnite.cpp"
 #include "SIGSpotInputs.cpp"
 #include "SIGSpot.cpp"
 #include "palmettoGallberry.cpp"

@@ -44,8 +44,8 @@ set(SOURCE
     src/behave/crownInputs.cpp
     src/behave/fireSize.cpp
     src/behave/fuelModelSet.cpp
-    src/behave/ignite.cpp
-    src/behave/igniteInputs.cpp
+    src/behave/SIGIgnite.cpp
+    src/behave/SIGIgniteInputs.cpp
     src/behave/newext.cpp
     src/behave/palmettoGallberry.cpp
     src/behave/randfuel.cpp
@@ -77,8 +77,8 @@ set(HEADERS
     src/behave/crownInputs.h
     src/behave/fireSize.h
     src/behave/fuelModelSet.h
-    src/behave/ignite.h
-    src/behave/igniteInputs.h
+    src/behave/SIGIgnite.h
+    src/behave/SIGIgniteInputs.h
     src/behave/newext.h
     src/behave/palmettoGallberry.h
     src/behave/randfuel.h
