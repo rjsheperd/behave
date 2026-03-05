@@ -1,0 +1,1366 @@
+#+TITLE: BehavePlus Fire Behavior Library — Rust Porting Roadmap
+#+AUTHOR: SIG
+#+DATE: 2026-03-05
+#+STARTUP: overview
+#+TODO: TODO IN-PROGRESS | DONE SKIP
+#+PROPERTY: header-args :eval never
+
+* Overview
+** Scope
+
+This document is a comprehensive roadmap for porting the BehavePlus fire behavior
+library from C++14 to Rust. The C++ source lives in =src/behave/= and consists of:
+
+- *41 header files* (.h)
+- *41 implementation files* (.cpp) (including 1 header-only file: =surfaceInputEnums.h=)
+- *~28,000 lines* total (calculations + data tables)
+- *Zero external dependencies* beyond the C++ standard library
+
+The library implements the Rothermel fire spread model and related fire science
+algorithms: surface fire, crown fire, spotting, ignition, containment, mortality,
+and environmental tools.
+
+** Architecture: C++ → Rust Mapping
+
+| C++ Concept             | Rust Equivalent                              |
+|-------------------------+----------------------------------------------|
+| Class with members      | =struct= + =impl= block                     |
+| Class hierarchy         | Composition + traits                         |
+| =enum struct=           | =enum= with =#[derive]= macros              |
+| Static class methods    | Module-level functions or associated fns     |
+| Header + .cpp pair      | Single =.rs= module file                    |
+| =std::vector<T>=        | =Vec<T>=                                     |
+| Raw pointers / refs     | Owned values or =&= / =&mut= references     |
+| =const= static arrays   | =const= arrays or =phf= compile-time maps   |
+| Namespace               | Rust =mod=                                   |
+| Exception (none used)   | =Result<T, BehaveError>=                     |
+
+** Guiding Principles
+
+1. *Numerical parity first* — every ported function must produce identical outputs
+   to the C++ for known inputs before any refactoring
+2. *No inheritance* — use composition and traits instead of class hierarchies
+3. *Immutable by default* — prefer =&self= methods; use =&mut self= only when needed
+4. *Error handling* — =Result<T, BehaveError>= at public API boundaries; panics only
+   for programmer errors (invariant violations)
+5. *Zero =unsafe=* — unless absolutely required for FFI
+6. *Test-driven* — port tests from =testBehave.cpp= alongside each module
+7. *Phase ordering* — respect dependency graph; foundation types must exist before
+   anything that uses them
+
+* Proposed Rust Project Layout
+
+#+begin_src text
+behave-rs/
+├── Cargo.toml
+├── src/
+│   ├── lib.rs                    # Re-exports, top-level docs
+│   ├── error.rs                  # BehaveError enum
+│   ├── units.rs                  # Unit enums + conversion trait (behaveUnits)
+│   ├── enums.rs                  # Surface input enums (surfaceInputEnums)
+│   │
+│   ├── fuel/
+│   │   ├── mod.rs
+│   │   ├── models.rs             # FuelModels, FuelModelRecord
+│   │   ├── moisture.rs           # MoistureScenarios
+│   │   ├── chaparral.rs          # ChaparralFuel
+│   │   ├── palmetto_gallberry.rs # PalmettoGallberry
+│   │   └── western_aspen.rs      # WesternAspen
+│   │
+│   ├── surface/
+│   │   ├── mod.rs
+│   │   ├── inputs.rs             # SurfaceInputs
+│   │   ├── fuelbed.rs            # SurfaceFuelbedIntermediates
+│   │   ├── reaction.rs           # SurfaceFireReactionIntensity
+│   │   ├── fire.rs               # SurfaceFire
+│   │   ├── two_fuel_models.rs    # SurfaceTwoFuelModels
+│   │   └── facade.rs             # Surface (facade)
+│   │
+│   ├── fire_size.rs              # FireSize (ellipse geometry)
+│   │
+│   ├── crown/
+│   │   ├── mod.rs
+│   │   ├── inputs.rs             # CrownInputs
+│   │   ├── fire.rs               # Crown
+│   │   └── firebrand.rs          # CrownFirebrandProcessor
+│   │
+│   ├── spot/
+│   │   ├── mod.rs
+│   │   ├── inputs.rs             # SpotInputs
+│   │   └── distance.rs           # Spot
+│   │
+│   ├── ignite/
+│   │   ├── mod.rs
+│   │   ├── inputs.rs             # IgniteInputs
+│   │   └── probability.rs        # Ignite
+│   │
+│   ├── contain/
+│   │   ├── mod.rs
+│   │   ├── resource.rs           # ContainResource
+│   │   ├── force.rs              # ContainForce
+│   │   ├── force_adapter.rs      # ContainForceAdapter
+│   │   ├── algorithm.rs          # Contain
+│   │   ├── sim.rs                # ContainSim
+│   │   └── adapter.rs            # ContainAdapter
+│   │
+│   ├── safety/
+│   │   ├── mod.rs
+│   │   ├── zone.rs               # Safety
+│   │   └── separation.rs         # SafeSeparationDistanceCalculator
+│   │
+│   ├── mortality/
+│   │   ├── mod.rs
+│   │   ├── inputs.rs             # MortalityInputs
+│   │   ├── equations.rs          # mortality_equation_table
+│   │   ├── species.rs            # species_master_table
+│   │   ├── canopy.rs             # canopy_coefficient_table
+│   │   └── calculator.rs         # Mortality
+│   │
+│   ├── weather/
+│   │   ├── mod.rs
+│   │   ├── fine_dead_fuel.rs     # FineDeadFuelMoistureTool
+│   │   ├── relative_humidity.rs  # RelativeHumidityTool
+│   │   ├── vpd.rs                # VaporPressureDeficitCalculator
+│   │   ├── wind_adjustment.rs    # WindAdjustmentFactor
+│   │   ├── wind_speed.rs         # WindSpeedUtility
+│   │   └── slope.rs              # SlopeTool
+│   │
+│   ├── exrate/
+│   │   ├── mod.rs
+│   │   ├── extension.rs          # Extension (newext)
+│   │   ├── randfuel.rs           # RandFuel
+│   │   └── randthread.rs         # RandThread
+│   │
+│   └── facade.rs                 # BehaveRun (top-level facade)
+│
+└── tests/
+    ├── surface_tests.rs          # From testBehave.cpp surface sections
+    ├── crown_tests.rs            # From testBehave.cpp crown sections
+    ├── spot_tests.rs             # From testBehave.cpp spot sections
+    ├── contain_tests.rs          # From testBehave.cpp contain sections
+    ├── mortality_tests.rs        # From mortality_client.cpp
+    ├── parity_tests.rs           # Cross-validation against C++ outputs
+    └── integration_tests.rs      # Full workflow tests (from client.cpp)
+#+end_src
+
+* Phase 0: Foundation — Units, Enums, Shared Types
+:PROPERTIES:
+:PHASE: 0
+:PRIORITY: CRITICAL
+:END:
+
+Everything depends on these types. Must be completed first.
+
+** TODO Port =behaveUnits.h= / =behaveUnits.cpp= → =src/units.rs=
+:PROPERTIES:
+:CPP_LINES: 1500 (272 + 1228)
+:END:
+
+The unit system defines 17 unit-type enums and conversion functions used throughout
+the entire library. Every other module imports this.
+
+*** TODO Define unit type enums with =#[derive(Debug, Clone, Copy, PartialEq)]= and =#[repr(u32)]=
+    - AreaUnits, BasalAreaUnits, CoverUnits, DensityUnits, FractionUnits
+    - LengthUnits, LoadingUnits, MoistureUnits, PressureUnits, SavrUnits
+    - SpeedUnits, SlopeUnits, TemperatureUnits, TimeUnits, HeatOfCombustionUnits
+    - HeatPerUnitAreaUnits, HeatSourceAndReactionIntensityUnits
+*** TODO Implement =UnitConversion= trait
+    #+begin_src rust
+    pub trait UnitConversion: Copy {
+        fn to_base(self, value: f64) -> f64;
+        fn from_base(self, value: f64) -> f64;
+    }
+    #+end_src
+*** TODO Port =toBaseUnits()= and =fromBaseUnits()= for each unit enum
+*** TODO Add unit tests for round-trip conversions (base → unit → base)
+*** TODO Verify all conversion factors against C++ source
+
+** TODO Port =surfaceInputEnums.h= → =src/enums.rs=
+:PROPERTIES:
+:CPP_LINES: 156 (header only)
+:END:
+
+Configuration enums shared across surface fire, fuel bed, and wind calculations.
+
+*** TODO Define enums with =#[derive]= macros
+    - MoistureClassInput, AspenFireSeverity
+    - WindAdjustmentFactorShelterMethod, WindAdjustmentFactorCalculationMethod
+    - WindHeightInputMode, WindAndSpreadOrientationMode
+    - FuelLifeState, FuelConstants
+    - SurfaceFireSpreadDirectionMode, TwoFuelModelsMethod
+    - ChaparralContants (sic — preserve original naming in docs, use correct Rust name)
+    - MoistureInputMode, TwoFuelModelsContants (sic)
+*** TODO Add conversion methods between enum variants and integer values
+
+** TODO Define =BehaveError= enum → =src/error.rs=
+:PROPERTIES:
+:NOTE: New file, no C++ equivalent
+:END:
+
+*** TODO Define error variants
+    - =InvalidFuelModel(i32)=
+    - =InvalidUnit(String)=
+    - =InvalidInput { field: &'static str, reason: String }=
+    - =CalculationError(String)=
+*** TODO Implement =std::fmt::Display= and =std::error::Error=
+
+* Phase 1: Data Tables — Fuel Models, Species, Moisture Scenarios
+:PROPERTIES:
+:PHASE: 1
+:DEPENDS_ON: Phase 0
+:END:
+
+Large static data with simple accessor logic. Porting these early validates the
+data-table pattern and provides test fixtures for later phases.
+
+** TODO Port =fuelModels.h= / =fuelModels.cpp= → =src/fuel/models.rs=
+:PROPERTIES:
+:CPP_LINES: 996 (112 + 884)
+:END:
+
+Contains 100+ fuel model records with 16 fields each (original 13, custom 40,
+dynamic chaparral/palmetto/aspen models).
+
+*** TODO Define =FuelModelRecord= struct with all 16 fields
+*** TODO Define =FuelModels= struct with built-in and custom model storage
+*** TODO Port static fuel model initialization (initializeOriginalFuelModels, etc.)
+    - Consider =const= array or =lazy_static= / =once_cell= for static models
+*** TODO Port =setCustomFuelModel()= / =clearCustomFuelModel()= methods
+*** TODO Port getter methods (getFuelCode, getFuelName, getMoistureOfExtinctionDead, etc.)
+*** TODO Add unit tests — verify all 13 original + 40 standard models load correctly
+*** TODO Verify fuel model data values against C++ source
+
+** TODO Port =moistureScenarios.h= / =moistureScenarios.cpp= → =src/fuel/moisture.rs=
+:PROPERTIES:
+:CPP_LINES: 399 (90 + 309)
+:END:
+
+16 predefined moisture scenario records.
+
+*** TODO Define =MoistureScenarioRecord= struct
+*** TODO Define =MoistureScenarios= struct with scenario storage
+*** TODO Port scenario initialization data
+*** TODO Port accessor methods (getNumberOfMoistureScenarios, getMoistureScenarioIndexByName, etc.)
+*** TODO Add unit tests — verify all 16 scenarios
+
+** TODO Port =species_master_table.h= / =species_master_table.cpp= → =src/mortality/species.rs=
+:PROPERTIES:
+:CPP_LINES: 421 (90 + 331)
+:END:
+
+248 species records with GACC region codes, equation types, and species codes.
+
+*** TODO Define =GACC= enum (Geographic Area Coordination Centers)
+*** TODO Define =SpeciesMasterTableRecord= struct
+*** TODO Define =SpeciesMasterTable= struct
+*** TODO Port =initializeMasterTable()= with all 248 records
+*** TODO Port lookup methods (getSpeciesTableIndexFromSpeciesCode, etc.)
+*** TODO Add unit tests — verify table size, spot-check several species
+
+** TODO Port =canopy_coefficient_table.h= / =canopy_coefficient_table.cpp= → =src/mortality/canopy.rs=
+:PROPERTIES:
+:CPP_LINES: 113 (55 + 58)
+:END:
+
+40-entry lookup table of canopy coefficients.
+
+*** TODO Define =CanopyCoefficientTableRecord= struct
+*** TODO Define =CanopyCoefficientTable= struct
+*** TODO Port coefficient data as =const= array
+*** TODO Add unit tests
+
+** TODO Port =mortality_equation_table.h= / =mortality_equation_table.cpp= → =src/mortality/equations.rs=
+:PROPERTIES:
+:CPP_LINES: 370 (109 + 261)
+:END:
+
+13 equation records plus enums for equation types and required fields.
+
+*** TODO Define enums: =CrownDamageType=, =RequiredFieldNames=, =CrownDamageEquationCode=, =EquationType=
+*** TODO Define =EquationRequiredFieldTableRecord= struct
+*** TODO Define =BoleCharCoefficientTableRecord= struct
+*** TODO Define =EquationRequiredFieldTable= struct
+*** TODO Port equation table data
+*** TODO Add unit tests
+
+* Phase 2: Core Fire Behavior — The Rothermel Engine
+:PROPERTIES:
+:PHASE: 2
+:DEPENDS_ON: Phase 0, Phase 1
+:END:
+
+The heart of the library. These files implement the Rothermel surface fire spread
+model. Port in dependency order: inputs → intermediates → reaction intensity →
+fire → two fuel models → fire size.
+
+** TODO Port =surfaceInputs.h= / =surfaceInputs.cpp= → =src/surface/inputs.rs=
+:PROPERTIES:
+:CPP_LINES: 1315 (276 + 1039)
+:END:
+
+Manages all input parameters for surface fire calculations.
+
+*** TODO Define =SurfaceInputs= struct
+    - Consider builder pattern for construction
+*** TODO Port input setter methods (setFuelModelNumber, setMoistureOneHour, setWindSpeed, etc.)
+*** TODO Port =updateSurfaceInputs()= orchestration method
+*** TODO Port getter methods
+*** TODO Port moisture scenario integration
+*** TODO Add unit tests — verify input round-trips
+
+** TODO Port =surfaceFuelbedIntermediates.h= / =surfaceFuelbedIntermediates.cpp= → =src/surface/fuelbed.rs=
+:PROPERTIES:
+:CPP_LINES: 1403 (185 + 1218)
+:END:
+
+Calculates intermediate Rothermel values: bulk density, packing ratio,
+characteristic SAV ratio, propagating flux, heat sink, etc.
+
+*** TODO Define =SurfaceFuelbedIntermediates= struct
+*** TODO Port =calculateFuelbedIntermediates()= — main calculation entry point
+*** TODO Port size class weighting calculations
+*** TODO Port special fuel type integration (chaparral, palmetto-gallberry, western aspen)
+*** TODO Port getter methods (getBulkDensity, getPropagatingFlux, getHeatSink, etc.)
+*** TODO Add unit tests — verify intermediate values for standard fuel models
+*** TODO Verify numerical parity with C++ for fuel models 1, 4, 10
+
+** TODO Port =surfaceFireReactionIntensity.h= / =surfaceFireReactionIntensity.cpp= → =src/surface/reaction.rs=
+:PROPERTIES:
+:CPP_LINES: 240 (64 + 176)
+:END:
+
+Implements Rothermel equation 27 — reaction intensity calculation.
+
+*** TODO Define =SurfaceFireReactionIntensity= struct
+*** TODO Port =calculateReactionIntensity()=
+*** TODO Port =calculateEtaM()= (moisture damping coefficient)
+*** TODO Port =calculateEtaS()= (mineral damping coefficient)
+*** TODO Port getter =getReactionIntensity()=
+*** TODO Add unit tests — verify against known reaction intensity values
+
+** TODO Port =surfaceFire.h= / =surfaceFire.cpp= → =src/surface/fire.rs=
+:PROPERTIES:
+:CPP_LINES: 1246 (229 + 1017)
+:END:
+
+Main surface fire spread model. 116 methods. The most critical file in the library.
+
+*** TODO Define =SurfaceFire= struct
+*** TODO Port no-wind-no-slope spread rate calculation
+*** TODO Port wind and slope factor calculations
+*** TODO Port =calculateForwardSpreadRate()= — the core Rothermel equation
+*** TODO Port midflame wind speed calculation
+*** TODO Port direction of maximum spread calculation
+*** TODO Port fireline intensity and flame length calculations
+*** TODO Port spread rate in direction of interest
+*** TODO Port all getter methods
+*** TODO Add unit tests — verify spread rates for standard fuel models
+*** TODO Verify numerical parity: fuel model 1 with known wind/slope inputs
+
+** TODO Port =surfaceTwoFuelModels.h= / =surfaceTwoFuelModels.cpp= → =src/surface/two_fuel_models.rs=
+:PROPERTIES:
+:CPP_LINES: 450 (109 + 341)
+:END:
+
+Blends spread rates from two fuel models using coverage weighting.
+
+*** TODO Define =SurfaceTwoFuelModels= struct
+*** TODO Port =calculateWeightedSpreadRate()=
+*** TODO Port getter methods
+*** TODO Add unit tests
+
+** TODO Port =fireSize.h= / =fireSize.cpp= → =src/fire_size.rs=
+:PROPERTIES:
+:CPP_LINES: 296 (77 + 219)
+:END:
+
+Fire perimeter and area from elliptical fire shape model.
+
+*** TODO Define =FireSize= struct
+*** TODO Port =calculateFireBasicDimensions()=
+*** TODO Port ellipse geometry calculations (getEllipticalA, getEllipticalB, etc.)
+*** TODO Port fire perimeter and area calculations
+*** TODO Add unit tests — verify ellipse geometry with known dimensions
+
+** TODO Port =surface.h= / =surface.cpp= → =src/surface/facade.rs=
+:PROPERTIES:
+:CPP_LINES: 1642 (320 + 1322)
+:END:
+
+Facade that orchestrates SurfaceFire, FireSize, SurfaceInputs, and FuelModels.
+
+*** TODO Define =Surface= struct composing SurfaceFire, FireSize, SurfaceInputs
+*** TODO Port =doSurfaceRunInDirectionOfMaxSpread()=
+*** TODO Port =doSurfaceRunInDirectionOfInterest()=
+*** TODO Port all public getter methods (getSpreadRate, getFlameLength, getFirelineIntensity, etc.)
+*** TODO Add integration tests using known fire behavior scenarios
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testSurfaceSingleFuelModel= (lines 251–521)
+
+Standard input scenario: fuel model GS4 (124), 6/7/8/60/90% moisture, 5 mph 20-ft wind, 30% slope, 50% canopy.
+
+| Test Description                                                         | Output Checked                        | Expected Value | Units            |
+|--------------------------------------------------------------------------+---------------------------------------+----------------+------------------|
+| North mode, 45° wind, 95° aspect, 30° slope                             | Spread rate                           |      19.677584 | ch/hr            |
+| Live moisture of extinction                                              | Live MOE                              |     137.968551 | %                |
+| Characteristic live moisture                                             | Char. live moisture                   |      85.874007 | %                |
+| Characteristic dead moisture                                             | Char. dead moisture                   |       6.005463 | %                |
+| Characteristic SAVR                                                      | SAVR                                  |    1631.128734 | ft²/ft³          |
+| Heat source, 45° wind, 95° aspect, 30° slope                            | Heat source                           |    5177.248579 | Btu/ft²/min      |
+| Heat source, 0° wind, 0° aspect, 0° slope                               | Heat source                           |    1164.267376 | Btu/ft²/min      |
+| Upslope mode, 5 mph 20-ft upslope wind                                  | Spread rate                           |       8.876216 | ch/hr            |
+| Backing spread rate                                                      | Backing rate                          |       2.916147 | ch/hr            |
+| Flanking spread rate                                                     | Flanking rate                         |       5.087666 | ch/hr            |
+| Spread distance (2 hrs)                                                  | Forward distance                      |      17.752433 | chains           |
+| Backing distance (2 hrs)                                                 | Backing distance                      |       5.832293 | chains           |
+| Flanking distance (2 hrs)                                                | Flanking distance                     |      10.175333 | chains           |
+| Moisture scenario D1L1                                                   | Spread rate                           |      15.023945 | ch/hr            |
+| Moisture scenario D2L3 (case insensitive)                                | Spread rate                           |       1.978840 | ch/hr            |
+| Aggregate dead+live moisture (3%/80%)                                    | Spread rate                           |       8.589431 | ch/hr            |
+| Aggregate dead + live size class (3% dead agg)                           | Spread rate                           |       9.752679 | ch/hr            |
+| Cross-slope wind 90°                                                     | Spread rate                           |       7.091665 | ch/hr            |
+| North mode, north wind, 0° aspect                                        | Spread rate                           |       8.876216 | ch/hr            |
+| North mode, 45° wind, 215° aspect                                        | Spread rate                           |       4.113265 | ch/hr            |
+| North mode, 45° wind, 5° aspect                                          | Spread rate                           |       8.503960 | ch/hr            |
+| Fuel model 4, 90° wind, 0° aspect, 40% canopy, 30° slope                | Spread rate                           |      46.631688 | ch/hr            |
+| Non-burnable fuel model 91                                               | Spread rate                           |       0.000000 | ch/hr            |
+
+**** =testCalculateScorchHeight= (lines 523–543)
+
+| Test Description                       | Fireline Int. | Wind      | Air Temp | Expected Scorch Ht | Units |
+|----------------------------------------+---------------+-----------+----------+---------------------+-------|
+| 80°F, 5 mph, 50 Btu/ft/s              | 50 Btu/ft/s   | 5 mph     | 80°F     |            7.617325 | ft    |
+| 70°F, 300 ft/min, 55 Btu/ft/s         | 55 Btu/ft/s   | 300 ft/min | 70°F    |            9.923720 | ft    |
+
+**** =testChaparral= (lines 545–599)
+
+| Test Description                                            | Expected Spread Rate | Units |
+|-------------------------------------------------------------+----------------------+-------|
+| Direct fuel load, depth 1 ft, 25% dead, 0.333 lb/ft², 3 mph, 0% slope | 1.792546             | ch/hr |
+| Chamise type, depth 2 ft, 33% dead, 4 mph, 10% slope        | 6.108717             | ch/hr |
+| Mixed brush type, depth 3 ft, 50% dead, 5 mph, 20% slope    | 13.945025            | ch/hr |
+
+**** =testPalmettoGallberry= (lines 601–640)
+
+Inputs: 10 yr age, 4 ft understory height, 50% palmetto coverage, 50 ft²/ac basal area.
+
+| Test Description                     | Expected Spread Rate | Units |
+|--------------------------------------+----------------------+-------|
+| Palmetto-Gallberry spread rate       |            12.521131 | ch/hr |
+
+**** =testWesternAspen= (lines 642–687)
+
+Inputs: aspen fuel model 3, 50% curing, low fire severity, 10 in DBH.
+
+| Test Description                     | Expected Value | Units    |
+|--------------------------------------+----------------+----------|
+| Western Aspen spread rate            |       0.847629 | ch/hr    |
+| Western Aspen mortality              |       0.267093 | fraction |
+
+**** =testLengthToWidthRatio= (lines 689–780)
+
+| Test Description                              | Expected L/W Ratio |
+|-----------------------------------------------+--------------------|
+| 0 mph wind, 0° slope                          |           1.000000 |
+| 5 mph midflame, 0° slope                      |           1.590064 |
+| 5 mph 20-ft, 45° wind, 95° aspect, 30° slope | 1.375624           |
+| 15 mph 20-ft, 45° wind, 95° aspect, 30° slope | 1.519936          |
+
+**** =testEllipticalDimensions= (lines 782–850)
+
+5 mph midflame, upslope mode; elapsed time = 3.5869124 min (so semiaxis b = 1.0 ch).
+
+| Test Description                           | Expected Value | Units     |
+|--------------------------------------------+----------------+-----------|
+| Elliptical A                               |       0.628905 | chains    |
+| Elliptical B                               |       1.000000 | chains    |
+| Elliptical C                               |       0.777482 | chains    |
+| Heading-to-backing ratio                   |       7.988029 | —         |
+| Fire area (1 hr)                           |      55.283555 | acres     |
+| Fire area (1 hr)                           |       0.223725 | km²       |
+| Fire perimeter (1 hr)                      |      86.714760 | chains    |
+
+**** =testDirectionOfInterest= (lines 852–936)
+
+| Test Description                                                     | Expected Spread Rate | Units   |
+|----------------------------------------------------------------------+----------------------+---------|
+| Perimeter mode, upslope, DOI 90°, 0° wind                           |             5.596433 | ft/min  |
+| Flame length in DOI (above scenario)                                  |             6.598148 | ft      |
+| Perimeter mode, upslope, DOI 160°, 290° wind                         |             2.766387 | ch/hr   |
+| Perimeter mode, upslope, DOI 215°, 215° wind                         |             2.818063 | ch/hr   |
+| Ignition point mode, north, DOI 30°, 280° wind, 135° aspect          |             4.180938 | ch/hr   |
+| Ignition point mode, north, DOI 90°, 0° wind, 45° aspect             |             3.438243 | ch/hr   |
+| Ignition point mode, north, DOI 285°, 280° wind, 263° aspect         |             2.944975 | ch/hr   |
+
+**** =testFirelineIntensity= (lines 938–961)
+
+| Test Description                 | Expected Intensity | Units          |
+|----------------------------------+--------------------+----------------|
+| Upslope mode, 20-ft wind        |         598.339039 | Btu/ft/s       |
+| Same, in metric                  |        2072.730450 | kW/m           |
+
+**** =testTwoFuelModels= (lines 963–1054)
+
+Two fuel model blend: FM 1 + FM GS4(124), 2D method, upslope mode, 5 mph 20-ft.
+
+| First FM Coverage | Expected Spread Rate (ch/hr) |
+|-------------------+------------------------------|
+| 0%                |                     8.876216 |
+| 10%               |                    10.470801 |
+| 20%               |                    12.189713 |
+| 30%               |                    13.958900 |
+| 40%               |                    15.706408 |
+| 50%               |                    17.362382 |
+| 60%               |                    18.859066 |
+| 70%               |                    20.130802 |
+| 80%               |                    21.114030 |
+| 90%               |                    21.747289 |
+| 100%              |                    21.971217 |
+
+**** =testSpeedUnitConversion= (lines 1434–1491)
+
+Same 8.876216 ch/hr spread rate verified in multiple units:
+
+| Units             | Expected Value |
+|-------------------+----------------|
+| ch/hr             |       8.876216 |
+| ft/min            |       9.763838 |
+| km/hr             |       0.178561 |
+| m/min             |       2.976018 |
+| m/s               |       0.049600 |
+| mph               |       0.110953 |
+
+**** =testSimpleSurface= (lines 1945–2001)
+
+GS4, 0% canopy, WAF=1.0, north mode, 5 mph 20-ft, 30% slope.
+
+| Test Description               | Expected Value | Units     |
+|--------------------------------+----------------+-----------|
+| Rate of spread                 |      34.011429 | ch/hr     |
+| Flame length                   |      15.811421 | ft        |
+| Fireline intensity             |    2292.684759 | Btu/ft/s  |
+
+* Phase 3: Crown Fire
+:PROPERTIES:
+:PHASE: 3
+:DEPENDS_ON: Phase 2
+:END:
+
+Crown fire depends on surface fire calculations and adds canopy interaction.
+
+** TODO Port =crownInputs.h= / =crownInputs.cpp= → =src/crown/inputs.rs=
+:PROPERTIES:
+:CPP_LINES: 173 (67 + 106)
+:END:
+
+*** TODO Define =CrownInputs= struct
+*** TODO Port setter/getter methods for canopy base height, bulk density, foliar moisture
+*** TODO Add unit tests
+
+** TODO Port =crown.h= / =crown.cpp= → =src/crown/fire.rs=
+:PROPERTIES:
+:CPP_LINES: 1325 (271 + 1054)
+:END:
+
+Crown fire spread model. 123 methods. Implements both Rothermel and Scott & Reinhardt methods.
+
+*** TODO Define =FireType= enum (Surface, ConditionalCrown, Crowning, Torching)
+*** TODO Define =Crown= struct
+*** TODO Port =doCrownRunRothermel()= method
+*** TODO Port =doCrownRunScottAndReinhardt()= method
+*** TODO Port =updateCrownInputs()= method
+*** TODO Port crown fire spread rate, flame length, and fire type determination
+*** TODO Port all getter methods (getCrownFireSpreadRate, getFireType, etc.)
+*** TODO Add unit tests — verify fire type classification
+*** TODO Verify numerical parity with C++ for known crown fire scenarios
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testCrownModuleRothermel= (lines 1056–1154)
+
+Standard crown inputs: FM GS4(124), 6/7/8/60/90% moisture, 120% foliar, 5 mph 20-ft wind,
+30% slope, 50% canopy cover, 30 ft canopy height, 6 ft canopy base height, 0.03 lb/ft³ bulk density.
+
+| Test Description                                    | Expected Value | Units      |
+|-----------------------------------------------------+----------------+------------|
+| Crown Rothermel spread rate                         |      10.259921 | ch/hr      |
+| Crown fire L/W ratio                                |       1.625000 | —          |
+| Crown fire area (1 hr)                              |       5.087736 | acres      |
+| Crown fire perimeter (1 hr)                         |      26.033937 | chains     |
+| Crown flame length                                  |      29.320557 | ft         |
+| Crown fireline intensity                            |    1775.061222 | Btu/ft/s   |
+| Fire type (20% 1-hr moisture → Surface)             |              0 | Surface    |
+| Fire type (standard inputs → Torching)              |              2 | Torching   |
+| Fire type (10 mph wind → Crowning)                  |              3 | Crowning   |
+| Fire type (60ft canopy, 30ft base, 0.06 CBD → Cond) |              1 | Conditional |
+
+**** =testCrownModuleScottAndReinhardt= (lines 1156–1312)
+
+**Scenario 1** — FM 10, 8/9/10/0/117% moisture, 100% foliar, 2187.23 ft/min 20-ft wind,
+20% slope, 38.1 ft canopy height, 2.95 ft base height, 0.01311 lb/ft³ CBD, WAF=0.4:
+
+| Test Description                                  | Expected Value | Units    |
+|---------------------------------------------------+----------------+----------|
+| S&R crown fire spread rate                        |      65.221842 | ft/min   |
+| S&R crown flame length                            |      60.744542 | ft       |
+| S&R crown fireline intensity                      |    5293.170672 | Btu/ft/s |
+| S&R critical open wind speed                      |    1717.916785 | ft/min   |
+| S&R fire type (Crowning expected)                 |              3 | Crowning |
+| S&R aggregate moisture (9%/100%) spread rate       |      64.016394 | ch/hr    |
+| S&R moisture scenario D3L2 spread rate             |      68.334996 | ch/hr    |
+
+**Scenario 2** — FM 5, 5/6/8/0/117% moisture, 100% foliar, 24.85 mph 20-ft wind,
+71.6 ft canopy height, 4.92 ft base height, 0.003746 lb/ft³ CBD, WAF=0.15:
+
+| Test Description                                  | Expected Value | Units    |
+|---------------------------------------------------+----------------+----------|
+| Crown fire spread rate                            |      29.475388 | ft/min   |
+| Crown flame length                                |      12.759447 | ft       |
+| Crown fireline intensity                          |     509.568753 | Btu/ft/s |
+| Critical open wind speed                          |    3874.421988 | ft/min   |
+| Fire type (Torching expected)                     |              2 | Torching |
+
+** TODO Port =CrownFirebrandProcessor.h= / =CrownFirebrandProcessor.cpp= → =src/crown/firebrand.rs=
+:PROPERTIES:
+:CPP_LINES: 522 (102 + 420)
+:END:
+
+Firebrand lofting and drift calculations for crown fires.
+
+*** TODO Define =CrownFirebrandProcessor= struct
+*** TODO Port =processFirebrandLoft()= and =processFirebrandDrift()=
+*** TODO Port =getFirebrandDistance()=, =getFirebrandHeight()=, =getFlameHeight()=
+*** TODO Add unit tests
+
+* Phase 4: Spotting
+:PROPERTIES:
+:PHASE: 4
+:DEPENDS_ON: Phase 3
+:END:
+
+Spot fire distance calculations for burning piles, surface fires, torching trees,
+and active crown fires.
+
+** TODO Port =spotInputs.h= / =spotInputs.cpp= → =src/spot/inputs.rs=
+:PROPERTIES:
+:CPP_LINES: 414 (157 + 257)
+:END:
+
+*** TODO Define enums: =SpotTreeSpecies= (14 species), =SpotFireLocation=, =SpotDownWindCanopyMode=
+*** TODO Define =SpotInputs= struct
+*** TODO Port setter methods
+*** TODO Add unit tests
+
+** TODO Port =spot.h= / =spot.cpp= → =src/spot/distance.rs=
+:PROPERTIES:
+:CPP_LINES: 860 (161 + 699)
+:END:
+
+Spot fire distance calculations with embedded species parameter tables.
+
+*** TODO Define =Spot= struct
+*** TODO Port species parameter tables (dbh-to-height ratios, flame height ratios, etc.)
+*** TODO Port =calculateSpottingDistanceFromBurningPile()=
+*** TODO Port =calculateSpottingDistanceFromSurfaceFire()=
+*** TODO Port =calculateSpottingDistanceFromTorchingTrees()=
+*** TODO Port =calculateSpottingDistanceFromActiveCrown()=
+*** TODO Add unit tests — verify against known spotting distances
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testSpotModule= (lines 1314–1432)
+
+Common inputs: ridge top location, 1 mi ridge-to-valley distance, 2000 ft elevation,
+30 ft downwind cover height, 5 mph 20-ft wind.
+
+**Burning Pile** (5 ft flame height):
+
+| Test Description                           | Expected Flat (mi) | Expected Mountain (mi) |
+|--------------------------------------------+--------------------+------------------------|
+| Closed downwind canopy                     |           0.017067 |               0.021330 |
+| Open downwind canopy                       |           0.024700 |               0.030863 |
+
+**Surface Fire** (flame length from prior surface run, closed canopy):
+
+| Test Description                           | Expected Flat (mi) | Expected Mountain (mi) |
+|--------------------------------------------+--------------------+------------------------|
+| Closed downwind canopy                     |           0.220050 |               0.267467 |
+
+**Torching Trees** (15 trees, 20 in DBH, 30 ft tall, Engelmann spruce, closed canopy):
+
+| Test Description                           | Expected Flat (mi) | Expected Mountain (mi) |
+|--------------------------------------------+--------------------+------------------------|
+| Closed downwind canopy                     |           0.181449 |               0.222396 |
+
+**Active Crown** (20 ft flame length, 30 ft tree height, closed canopy):
+
+| Test Description                           | Expected Mountain (mi) |
+|--------------------------------------------+------------------------|
+| Closed downwind canopy                     |               0.400473 |
+
+* Phase 5: Ignition
+:PROPERTIES:
+:PHASE: 5
+:DEPENDS_ON: Phase 0
+:END:
+
+Ignition probability calculations. Relatively independent of other phases.
+
+** TODO Port =igniteInputs.h= / =igniteInputs.cpp= → =src/ignite/inputs.rs=
+:PROPERTIES:
+:CPP_LINES: 213 (99 + 114)
+:END:
+
+*** TODO Define enums: =IgnitionFuelBedType= (8 types), =LightningCharge= (Negative, Positive, Unknown)
+*** TODO Define =IgniteInputs= struct
+*** TODO Port setter/getter methods
+*** TODO Add unit tests
+
+** TODO Port =ignite.h= / =ignite.cpp= → =src/ignite/probability.rs=
+:PROPERTIES:
+:CPP_LINES: 402 (82 + 320)
+:END:
+
+*** TODO Define =Ignite= struct
+*** TODO Port =calculateFirebrandIgnitionProbability()=
+*** TODO Port =calculateLightningIgnitionProbability()=
+*** TODO Add unit tests — verify ignition probabilities for known conditions
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testIgniteModule= (lines 1493–1554)
+
+**Scenario 1** — Douglas fir duff: 6% 1-hr, 8% 100-hr moisture, 80°F, 50% shade, 6 in duff, Unknown charge:
+
+| Test Description                              | Expected Value | Units    |
+|-----------------------------------------------+----------------+----------|
+| Firebrand ignition probability                |     0.54831705 | fraction |
+| Lightning ignition probability                |     0.39362018 | fraction |
+
+**Scenario 2** — Lodgepole pine duff: 7% 1-hr, 9% 100-hr moisture, 90°F, 25% shade, 8 in duff, Negative charge:
+
+| Test Description                              | Expected Value | Units   |
+|-----------------------------------------------+----------------+---------|
+| Firebrand ignition probability                |      50.717573 | percent |
+| Lightning ignition probability                |      17.931991 | percent |
+
+* Phase 6: Containment
+:PROPERTIES:
+:PHASE: 6
+:DEPENDS_ON: Phase 2
+:END:
+
+The most algorithmically complex subsystem. Simulates fire containment by
+suppression resources attacking fire flanks. Port in dependency order:
+Resource → Force → ForceAdapter → Contain → ContainSim → ContainAdapter.
+
+** TODO Port =ContainResource.h= / =ContainResource.cpp= → =src/contain/resource.rs=
+:PROPERTIES:
+:CPP_LINES: 294 (100 + 194)
+:END:
+
+Individual suppression resource (crew, engine, etc.).
+
+*** TODO Define =ContainFlank= enum (LeftFlank, RightFlank, BothFlanks, NeitherFlank)
+*** TODO Define =ContainResource= struct
+*** TODO Port methods: arrival(), production(), duration(), flank(), description()
+*** TODO Add unit tests
+
+** TODO Port =ContainForce.h= / =ContainForce.cpp= → =src/contain/force.rs=
+:PROPERTIES:
+:CPP_LINES: 534 (86 + 448)
+:END:
+
+Collection of resources deployed against a fire.
+
+*** TODO Define =ContainForce= struct
+*** TODO Port =addResource()= method
+*** TODO Port production rate calculation (productionRate at time t)
+*** TODO Port =firstArrival()=, =exhausted()=, =resourceArrival()=, =resourceProduction()=
+*** TODO Add unit tests — verify production rates with multiple resources
+
+** TODO Port =ContainForceAdapter.h= / =ContainForceAdapter.cpp= → =src/contain/force_adapter.rs=
+:PROPERTIES:
+:CPP_LINES: 131 (57 + 74)
+:END:
+
+*** TODO Define =ContainForceAdapter= struct
+*** TODO Port =addResource()=, =removeResourceAt()=, =firstArrival()=
+*** TODO Add unit tests
+
+** TODO Port =Contain.h= / =Contain.cpp= → =src/contain/algorithm.rs=
+:PROPERTIES:
+:CPP_LINES: 1595 (250 + 1345)
+:END:
+
+The core containment algorithm. Most complex single file in the library.
+
+*** TODO Define =ContainTactic= enum (HeadAttack, RearAttack)
+*** TODO Define =ContainStatus= enum (Unreported, Reported, Attacked, Contained, Overrun, Exhausted, Overflow, SizeLimitExceeded, TimeLimitExceeded)
+*** TODO Define =Contain= struct with all state variables
+*** TODO Port =step()= — the main simulation step function
+*** TODO Port =calcU()= — fire head position at given time
+*** TODO Port =calcCoordinates()= — perimeter point calculation
+*** TODO Port =attackDistance()= and =attackTime()=
+*** TODO Port =containLog()= for debugging output
+*** TODO Add unit tests — verify containment for simple single-resource scenarios
+*** TODO Verify step-by-step numerical parity with C++
+
+** TODO Port =ContainSim.h= / =ContainSim.cpp= → =src/contain/sim.rs=
+:PROPERTIES:
+:CPP_LINES: 1250 (190 + 1060)
+:END:
+
+Runs the full containment simulation with left and right flanks.
+
+*** TODO Define =ContainSim= struct
+*** TODO Port =run()= — main simulation loop
+*** TODO Port perimeter coordinate tracking (m_x, m_y arrays)
+*** TODO Port result methods: finalFireCost(), finalFireLine(), finalFireSize()
+*** TODO Add unit tests — verify simulation outcomes
+
+** TODO Port =ContainAdapter.h= / =ContainAdapter.cpp= → =src/contain/adapter.rs=
+:PROPERTIES:
+:CPP_LINES: 491 (184 + 307)
+:END:
+
+Public-facing adapter with unit conversions and simplified API.
+
+*** TODO Define =ContainAdapter= enums (ContainTacticEnum, ContainStatusEnum, ContainFlankEnum)
+*** TODO Define =ContainAdapter= struct
+*** TODO Port =addResource()=, =removeResourceAt()=, =doContainRun()=
+*** TODO Port result getters (getFinalCost, getContainmentStatus, etc.)
+*** TODO Add integration tests — full containment scenario with multiple resources
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testContainModule= (lines 1603–1678)
+
+Inputs: attack distance = 0 ch, L/W ratio = 3, report rate = 5 ch/hr,
+report size = 1 ac, head attack tactic, 1 resource (arrival = 2 min,
+duration = 8 hr, production = 20 ch/hr).
+
+Expected result: *Contained*.
+
+| Test Description                    | Expected Value | Units   |
+|-------------------------------------+----------------+---------|
+| Final fire line length              |  39.539849615  | chains  |
+| Perimeter at initial attack         |  37.519179910  | chains  |
+| Perimeter at containment            |  39.539849615  | chains  |
+| Fire size at initial attack         |   8.954501709  | acres   |
+| Final fire size                     |   9.427497140  | acres   |
+| Final containment area              |   9.427497140  | acres   |
+| Final time since report             | 238.750000000  | minutes |
+| Containment status                  | Contained      | —       |
+
+* Phase 7: Safety & Mortality
+:PROPERTIES:
+:PHASE: 7
+:DEPENDS_ON: Phase 0, Phase 1
+:END:
+
+Safety zone calculations and tree mortality predictions.
+
+** TODO Port =safety.h= / =safety.cpp= → =src/safety/zone.rs=
+:PROPERTIES:
+:CPP_LINES: 162 (74 + 88)
+:END:
+
+*** TODO Define =Safety= struct
+*** TODO Port =calculateSafetyZone()=
+*** TODO Port getter methods (getSeparationDistance, getSafetyZoneArea)
+*** TODO Add unit tests
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testSafetyModule= (lines 1556–1601)
+
+Inputs: 5 ft flame height, 6 personnel (50 ft² each), 1 equipment (300 ft² each).
+
+| Test Description         | Expected Value | Units |
+|--------------------------+----------------+-------|
+| Separation distance      |      20.000000 | ft    |
+| Safety zone area         |    0.082490356 | acres |
+| Safety zone radius       |      33.819766 | ft    |
+
+** TODO Port =safeSeparationDistanceCalculator.h= / =safeSeparationDistanceCalculator.cpp= → =src/safety/separation.rs=
+:PROPERTIES:
+:CPP_LINES: 265 (93 + 172)
+:END:
+
+*** TODO Define enums: =BurningCondition=, =SlopeClass=, =SpeedClass=, =SafetyCondition=
+*** TODO Define =SafeSeparationDistanceCalculator= struct
+*** TODO Port =calculate()= method
+*** TODO Port condition classification methods
+*** TODO Add unit tests
+
+** TODO Port =mortality_inputs.h= / =mortality_inputs.cpp= → =src/mortality/inputs.rs=
+:PROPERTIES:
+:CPP_LINES: 460 (137 + 323)
+:END:
+
+*** TODO Define enums: =BeetleDamage=, =FireSeverity=, =FlameLengthOrScorchHeightSwitch=
+*** TODO Define =MortalityInputs= struct
+*** TODO Port setter/getter methods
+*** TODO Add unit tests
+
+** TODO Port =mortality.h= / =mortality.cpp= → =src/mortality/calculator.rs=
+:PROPERTIES:
+:CPP_LINES: 2685 (225 + 2460)
+:END:
+
+Largest file in the codebase. Tree mortality probability calculations.
+
+*** TODO Define =Mortality= struct
+*** TODO Port =calculateScorchHeight()= — multiple equation variants
+*** TODO Port =calculateMortality()= — species-specific mortality equations
+*** TODO Port =updateInputsForSpeciesCodeAndEquationType()=
+*** TODO Port all getter methods
+*** TODO Add unit tests — verify mortality for key species
+*** TODO Verify numerical parity with =mortality_client.cpp= test cases
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testMortalityModule= (lines 1680–1688)
+
+NOTE: The C++ test suite has only a stub for mortality module tests (=// TODO: Create tests for Mortality module=).
+Scorch height tests exist under =testCalculateScorchHeight= (covered in Surface section above).
+Additional mortality test data should be derived from =testMortality/mortality_client.cpp=.
+
+**** =testCalculateScorchHeight= (lines 523–543, also referenced under Surface)
+
+| Test Description                       | Fireline Int. | Wind       | Air Temp | Expected Scorch Ht | Units |
+|----------------------------------------+---------------+------------+----------+---------------------+-------|
+| 80°F, 5 mph, 50 Btu/ft/s              | 50 Btu/ft/s   | 5 mph      | 80°F     |            7.617325 | ft    |
+| 70°F, 300 ft/min, 55 Btu/ft/s         | 55 Btu/ft/s   | 300 ft/min | 70°F     |            9.923720 | ft    |
+
+* Phase 8: Weather & Environmental Tools
+:PROPERTIES:
+:PHASE: 8
+:DEPENDS_ON: Phase 0
+:END:
+
+Standalone environmental calculators. Each is relatively independent.
+
+** TODO Port =fineDeadFuelMoistureTool.h= / =fineDeadFuelMoistureTool.cpp= → =src/weather/fine_dead_fuel.rs=
+:PROPERTIES:
+:CPP_LINES: 581 (176 + 405)
+:END:
+
+Fine dead fuel moisture lookup tables (reference moisture + corrections).
+
+*** TODO Define index enums: FDFMToolAspectIndex, FDFMToolDryBulbIndex, FDFMToolElevationIndex, FDFMToolMonthIndex, FDFMToolRHIndex, FDFMToolShadingIndex, FDFMToolSlopeIndex, FDFMToolTimeOfDayIndex
+*** TODO Define =FineDeadFuelMoistureTool= struct
+*** TODO Port reference moisture tables
+*** TODO Port correction moisture tables
+*** TODO Port =calculate()= and =calculateByIndex()=
+*** TODO Add unit tests — verify moisture values for known conditions
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testFineDeadFuelMoistureTool= (lines 1690–1797)
+
+Tests use =calculateByIndex()= with integer index values for all 8 dimensions.
+
+| Test Description           | Ref Moisture | Correction | Fine Dead Fuel Moisture | Units |
+|----------------------------+--------------+------------+-------------------------+-------|
+| All zero indices           |            1 |          2 |                       3 | %     |
+| All one indices            |            2 |          4 |                       6 | %     |
+| All max indices            |           12 |          6 |                      18 | %     |
+| All indices out of bounds  |           -1 |         -1 |                      -1 | %     |
+
+** TODO Port =relativeHumidity.h= / =relativeHumidity.cpp= → =src/weather/relative_humidity.rs=
+:PROPERTIES:
+:CPP_LINES: 182 (47 + 135)
+:END:
+
+*** TODO Define =RelativeHumidityTool= struct
+*** TODO Port =calculate()= — RH from dry/wet bulb temperatures
+*** TODO Port dew point temperature calculation
+*** TODO Add unit tests
+
+** TODO Port =vaporPressureDeficitCalculator.h= / =vaporPressureDeficitCalculator.cpp= → =src/weather/vpd.rs=
+:PROPERTIES:
+:CPP_LINES: 128 (47 + 81)
+:END:
+
+*** TODO Define =VaporPressureDeficitCalculator= struct
+*** TODO Port =runCalculation()=
+*** TODO Add unit tests
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testVaporPressureDeficitCalculator= (lines 1926–1942)
+
+All at 50°F, varying RH (tolerance = 1e-03):
+
+| RH (%) | Expected VPD (hPa) |
+|--------+--------------------|
+|    100 |              0.000 |
+|     90 |              1.228 |
+|     80 |              2.457 |
+|     70 |              3.685 |
+|     60 |              4.913 |
+|     50 |              6.142 |
+|     40 |              7.370 |
+|     30 |              8.598 |
+|     20 |              9.827 |
+|     10 |             11.055 |
+
+** TODO Port =windAdjustmentFactor.h= / =windAdjustmentFactor.cpp= → =src/weather/wind_adjustment.rs=
+:PROPERTIES:
+:CPP_LINES: 162 (55 + 107)
+:END:
+
+Note: C++ class has a typo: =WindAjustmentFactor= — use corrected spelling in Rust.
+
+*** TODO Define =WindAdjustmentFactor= struct
+*** TODO Port =calculateWindAdjustmentFactorWithCrownRatio()=
+*** TODO Port =calculateWindAdjustmentFactorWithoutCrownRatio()=
+*** TODO Add unit tests
+
+** TODO Port =windSpeedUtility.h= / =windSpeedUtility.cpp= → =src/weather/wind_speed.rs=
+:PROPERTIES:
+:CPP_LINES: 99 (47 + 52)
+:END:
+
+*** TODO Define =WindSpeedUtility= struct (or module-level functions)
+*** TODO Port =windSpeedAtMidflame()=
+*** TODO Port =windSpeedAtTwentyFeetFromTenMeter()=
+*** TODO Add unit tests
+
+** TODO Port =slopeTool.h= / =slopeTool.cpp= → =src/weather/slope.rs=
+:PROPERTIES:
+:CPP_LINES: 411 (99 + 312)
+:END:
+
+*** TODO Define enums: =RepresentativeFraction=, =HorizontalDistanceIndex=
+*** TODO Define =SlopeTool= struct
+*** TODO Port =calculateHorizontalDistance()= and =calculateSlopeFromMapMeasurements()=
+*** TODO Add unit tests
+
+*** Reference Test Cases from =testBehave.cpp=
+
+**** =testSlopeTool= (lines 1799–1912)
+
+**Scenario 1** — Imperial: 1:1980 scale, 3.6 in map distance, 50 ft contour interval, 4.1 contours:
+
+| Test Description              | Expected Value | Units   |
+|-------------------------------+----------------+---------|
+| Slope in degrees              |             19 | degrees |
+| Slope in percent              |             35 | percent |
+| Elevation change              |            205 | ft      |
+| Horizontal distance           |            594 | ft      |
+
+**Scenario 2** — Metric: 1:3960 scale, 3.0 cm map distance, 15 m contour interval, 5.5 contours:
+
+| Test Description              | Expected Value | Units   |
+|-------------------------------+----------------+---------|
+| Slope in degrees              |             35 | degrees |
+| Slope in percent              |             69 | percent |
+| Elevation change              |             82 | m       |
+| Horizontal distance           |            119 | m       |
+
+**Horizontal Distance Calculation** — 3.0 in map distance, 30% max slope:
+
+| Direction from Upslope          | Expected Horiz. Dist (ft) |
+|---------------------------------+---------------------------|
+| 0° (upslope)                    |                       2.9 |
+| 15°                             |                       2.9 |
+| 30°                             |                       2.9 |
+| 45°                             |                       2.9 |
+| 60°                             |                       3.0 |
+| 75°                             |                       3.0 |
+| 90° (cross-slope)               |                       3.0 |
+
+* Phase 9: Special Fuel Types
+:PROPERTIES:
+:PHASE: 9
+:DEPENDS_ON: Phase 0
+:END:
+
+Dynamic fuel models for specific vegetation types. Used by =surfaceFuelbedIntermediates=
+but can be ported and tested independently.
+
+** TODO Port =chaparralFuel.h= / =chaparralFuel.cpp= → =src/fuel/chaparral.rs=
+:PROPERTIES:
+:CPP_LINES: 651 (134 + 517)
+:END:
+
+Chaparral dynamic fuel model with age/date-based fuel loading.
+
+*** TODO Define =ChaparralFuel= struct
+*** TODO Port fuel load calculation methods (age and date-based)
+*** TODO Port multi-dimensional data arrays (density, heat, load, moisture, savr, silica)
+*** TODO Port =updateFuelLoads()=
+*** TODO Add unit tests — verify fuel loads for known ages
+
+** TODO Port =palmettoGallberry.h= / =palmettoGallberry.cpp= → =src/fuel/palmetto_gallberry.rs=
+:PROPERTIES:
+:CPP_LINES: 260 (75 + 185)
+:END:
+
+*** TODO Define =PalmettoGallberry= struct
+*** TODO Port fuel load calculations (dead fine, live fine, fuel bed depth, etc.)
+*** TODO Add unit tests
+
+** TODO Port =westernAspen.h= / =westernAspen.cpp= → =src/fuel/western_aspen.rs=
+:PROPERTIES:
+:CPP_LINES: 356 (86 + 270)
+:END:
+
+*** TODO Define =WesternAspen= struct
+*** TODO Port aspen fuel load and SAVR calculations
+*** TODO Port =calculateAspenMortality()=
+*** TODO Add unit tests
+
+** TODO Port EXRATE package: =newext.h/.cpp=, =randfuel.h/.cpp=, =randthread.h/.cpp= → =src/exrate/=
+:PROPERTIES:
+:CPP_LINES: 2435 (111+416 + 129+733 + 137+909)
+:NOTE: Mark Finney's EXRATE package for stochastic fire spread
+:END:
+
+*** TODO Port =Extension= struct and =allocExtension()=, =calcProb()=, =run()=
+*** TODO Port =RandFuel= struct and =allocFuels()=, =calcCombinations()=, =computeSpread2()=
+*** TODO Port =RandThread= struct and =calcSpreadPaths2()=, =setThreadData()=
+*** TODO Port =FuelType= and =PathStruct= data structures
+*** TODO Add unit tests
+*** TODO NOTE: Consider whether thread-based design needs async/rayon adaptation in Rust
+
+* Phase 10: Facade & Integration
+:PROPERTIES:
+:PHASE: 10
+:DEPENDS_ON: Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, Phase 8, Phase 9
+:END:
+
+The top-level =BehaveRun= facade that ties all modules together.
+
+** TODO Port =behaveRun.h= / =behaveRun.cpp= → =src/facade.rs=
+:PROPERTIES:
+:CPP_LINES: 304 (121 + 183)
+:END:
+
+Facade struct that owns instances of Surface, Crown, Spot, Ignite, ContainAdapter,
+Safety, Mortality, and environmental tools.
+
+*** TODO Define =BehaveRun= struct composing all module facades
+*** TODO Port =reinitialize()= method
+*** TODO Port fuel model and moisture scenario delegation methods
+*** TODO Port public API getter methods
+*** TODO Consider builder pattern for BehaveRun construction
+*** TODO Add integration tests
+
+** TODO Write comprehensive integration tests → =tests/=
+:PROPERTIES:
+:NOTE: Derived from C++ test files, not direct ports
+:END:
+
+*** TODO Port surface fire test cases from =testBehave.cpp=
+*** TODO Port crown fire test cases from =testBehave.cpp=
+*** TODO Port spot fire test cases from =testBehave.cpp=
+*** TODO Port containment test cases from =testBehave.cpp=
+*** TODO Port mortality test cases from =mortality_client.cpp=
+*** TODO Create parity tests that compare Rust outputs to known C++ outputs
+*** TODO Create end-to-end workflow tests based on =client.cpp= examples
+
+* Phase 11: FFI & Bindings (Optional)
+:PROPERTIES:
+:PHASE: 11
+:DEPENDS_ON: Phase 10
+:END:
+
+Optional C FFI layer for interop with other languages (Python, JavaScript via WASM, etc.).
+
+** TODO Design C FFI interface
+*** TODO Define opaque handle types for BehaveRun, Surface, Crown, etc.
+*** TODO Design =extern "C"= function signatures matching common use patterns
+*** TODO Document memory ownership conventions (who allocates, who frees)
+
+** TODO Implement FFI layer
+*** TODO Create =ffi.rs= or =ffi/= module with =#[no_mangle] extern "C"= functions
+*** TODO Add =#[repr(C)]= to structs that cross the FFI boundary
+*** TODO Implement error code return pattern for C callers
+*** TODO Add FFI integration tests
+
+** TODO WebAssembly target (optional)
+*** TODO Add =wasm32-unknown-unknown= target support
+*** TODO Create =wasm-bindgen= bindings for browser/Node.js usage
+*** TODO Add wasm-specific integration tests
+
+* Reference: C++ Source File Inventory
+:PROPERTIES:
+:VISIBILITY: folded
+:END:
+
+Complete mapping of every C++ source file to its Rust destination and porting phase.
+
+| Phase | C++ File                              | Lines (H+CPP)  | Rust Module                      |
+|-------+---------------------------------------+-----------------+----------------------------------|
+|     0 | behaveUnits.h/.cpp                    | 272 + 1228      | src/units.rs                     |
+|     0 | surfaceInputEnums.h                   | 156             | src/enums.rs                     |
+|     1 | fuelModels.h/.cpp                     | 112 + 884       | src/fuel/models.rs               |
+|     1 | moistureScenarios.h/.cpp              | 90 + 309        | src/fuel/moisture.rs             |
+|     1 | species_master_table.h/.cpp           | 90 + 331        | src/mortality/species.rs         |
+|     1 | canopy_coefficient_table.h/.cpp       | 55 + 58         | src/mortality/canopy.rs          |
+|     1 | mortality_equation_table.h/.cpp       | 109 + 261       | src/mortality/equations.rs       |
+|     2 | surfaceInputs.h/.cpp                  | 276 + 1039      | src/surface/inputs.rs            |
+|     2 | surfaceFuelbedIntermediates.h/.cpp    | 185 + 1218      | src/surface/fuelbed.rs           |
+|     2 | surfaceFireReactionIntensity.h/.cpp   | 64 + 176        | src/surface/reaction.rs          |
+|     2 | surfaceFire.h/.cpp                    | 229 + 1017      | src/surface/fire.rs              |
+|     2 | surfaceTwoFuelModels.h/.cpp           | 109 + 341       | src/surface/two_fuel_models.rs   |
+|     2 | fireSize.h/.cpp                       | 77 + 219        | src/fire_size.rs                 |
+|     2 | surface.h/.cpp                        | 320 + 1322      | src/surface/facade.rs            |
+|     3 | crownInputs.h/.cpp                    | 67 + 106        | src/crown/inputs.rs              |
+|     3 | crown.h/.cpp                          | 271 + 1054      | src/crown/fire.rs                |
+|     3 | CrownFirebrandProcessor.h/.cpp        | 102 + 420       | src/crown/firebrand.rs           |
+|     4 | spotInputs.h/.cpp                     | 157 + 257       | src/spot/inputs.rs               |
+|     4 | spot.h/.cpp                           | 161 + 699       | src/spot/distance.rs             |
+|     5 | igniteInputs.h/.cpp                   | 99 + 114        | src/ignite/inputs.rs             |
+|     5 | ignite.h/.cpp                         | 82 + 320        | src/ignite/probability.rs        |
+|     6 | ContainResource.h/.cpp                | 100 + 194       | src/contain/resource.rs          |
+|     6 | ContainForce.h/.cpp                   | 86 + 448        | src/contain/force.rs             |
+|     6 | ContainForceAdapter.h/.cpp            | 57 + 74         | src/contain/force_adapter.rs     |
+|     6 | Contain.h/.cpp                        | 250 + 1345      | src/contain/algorithm.rs         |
+|     6 | ContainSim.h/.cpp                     | 190 + 1060      | src/contain/sim.rs               |
+|     6 | ContainAdapter.h/.cpp                 | 184 + 307       | src/contain/adapter.rs           |
+|     7 | safety.h/.cpp                         | 74 + 88         | src/safety/zone.rs               |
+|     7 | safeSeparationDistanceCalculator.h/.cpp | 93 + 172      | src/safety/separation.rs         |
+|     7 | mortality_inputs.h/.cpp               | 137 + 323       | src/mortality/inputs.rs          |
+|     7 | mortality.h/.cpp                      | 225 + 2460      | src/mortality/calculator.rs      |
+|     8 | fineDeadFuelMoistureTool.h/.cpp       | 176 + 405       | src/weather/fine_dead_fuel.rs    |
+|     8 | relativeHumidity.h/.cpp               | 47 + 135        | src/weather/relative_humidity.rs |
+|     8 | vaporPressureDeficitCalculator.h/.cpp | 47 + 81         | src/weather/vpd.rs               |
+|     8 | windAdjustmentFactor.h/.cpp           | 55 + 107        | src/weather/wind_adjustment.rs   |
+|     8 | windSpeedUtility.h/.cpp               | 47 + 52         | src/weather/wind_speed.rs        |
+|     8 | slopeTool.h/.cpp                      | 99 + 312        | src/weather/slope.rs             |
+|     9 | chaparralFuel.h/.cpp                  | 134 + 517       | src/fuel/chaparral.rs            |
+|     9 | palmettoGallberry.h/.cpp              | 75 + 185        | src/fuel/palmetto_gallberry.rs   |
+|     9 | westernAspen.h/.cpp                   | 86 + 270        | src/fuel/western_aspen.rs        |
+|     9 | newext.h/.cpp                         | 111 + 416       | src/exrate/extension.rs          |
+|     9 | randfuel.h/.cpp                       | 129 + 733       | src/exrate/randfuel.rs           |
+|     9 | randthread.h/.cpp                     | 137 + 909       | src/exrate/randthread.rs         |
+|    10 | behaveRun.h/.cpp                      | 121 + 183       | src/facade.rs                    |
+
+** Test & Example Files (Not Ported — Used as Reference)
+
+| C++ File                                      | Purpose                          |
+|-----------------------------------------------+----------------------------------|
+| client.cpp                                    | API usage examples               |
+| testBehave/testBehave.cpp                     | Main test suite                  |
+| testMortality/mortality_client.cpp            | Mortality-specific tests         |
+| rawsBatch/behaveRawsBatch.cpp                 | RAWS batch processing example    |
+| spotDistancePile/computePileSpottingDistance.cpp         | Pile spotting example  |
+| spotDistanceSurface/computeSurfaceSpottingDistance.cpp   | Surface spotting example |
+| spotDistanceTorchingTrees/computeTorchingTreesSpottingDistance.cpp | Torching trees example |
+
+* Rust Design Decisions
+
+** Enum Translation
+
+C++ uses =enum struct= with integer backing. In Rust:
+#+begin_src rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u32)]
+pub enum FuelLifeState {
+    Dead = 0,
+    Live = 1,
+}
+#+end_src
+
+** Unit Conversion Trait
+
+Replace static methods with a trait:
+#+begin_src rust
+pub trait UnitConversion: Copy {
+    fn to_base(self, value: f64) -> f64;
+    fn from_base(self, value: f64) -> f64;
+}
+
+impl UnitConversion for LengthUnits {
+    fn to_base(self, value: f64) -> f64 {
+        match self {
+            LengthUnits::Feet => value * 0.3048,
+            LengthUnits::Meters => value,
+            LengthUnits::Miles => value * 1609.344,
+            LengthUnits::Kilometers => value * 1000.0,
+            LengthUnits::Chains => value * 20.1168,
+        }
+    }
+    // ...
+}
+#+end_src
+
+** No Inheritance — Composition + Traits
+
+C++ =SurfaceFire= owns =SurfaceFuelbedIntermediates= and =SurfaceFireReactionIntensity=.
+In Rust, same pattern via struct composition:
+#+begin_src rust
+pub struct SurfaceFire {
+    fuelbed: SurfaceFuelbedIntermediates,
+    reaction: SurfaceFireReactionIntensity,
+    // ... spread rate fields
+}
+#+end_src
+
+** Error Handling
+
+Public API boundaries return =Result=:
+#+begin_src rust
+pub fn calculate_spread_rate(&mut self) -> Result<f64, BehaveError> {
+    if self.fuel_model == 0 {
+        return Err(BehaveError::InvalidFuelModel(0));
+    }
+    // ... calculation
+    Ok(spread_rate)
+}
+#+end_src
+
+Internal methods can use =f64= directly when inputs are already validated.
+
+** Data Tables
+
+Static fuel model data as =const= arrays:
+#+begin_src rust
+pub const STANDARD_FUEL_MODELS: &[FuelModelRecord] = &[
+    FuelModelRecord { number: 1, code: "FM1", name: "Short grass", /* ... */ },
+    FuelModelRecord { number: 2, code: "FM2", name: "Timber grass and understory", /* ... */ },
+    // ...
+];
+#+end_src
+
+For keyed lookups, consider =phf= (compile-time hash maps).
+
+** Builder Pattern for Complex Inputs
+
+Replace C++ batch setter methods:
+#+begin_src rust
+let inputs = SurfaceInputsBuilder::new()
+    .fuel_model(1)
+    .moisture_one_hour(0.06)
+    .moisture_ten_hour(0.07)
+    .wind_speed(5.0, SpeedUnits::MilesPerHour)
+    .slope(30.0, SlopeUnits::Percent)
+    .build()?;
+#+end_src
+
+** Testing Strategy
+
+Each module has =#[cfg(test)]= inline tests:
+#+begin_src rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fuel_model_1_spread_rate() {
+        // Known C++ output for fuel model 1 with standard conditions
+        let expected = 7.74; // ch/hr
+        let result = /* ... */;
+        assert!((result - expected).abs() < 0.01);
+    }
+}
+#+end_src
+
+Integration tests in =tests/= directory for cross-module workflows.
