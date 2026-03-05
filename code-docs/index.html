@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BehavePlus Code Documentation</title>
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/@catppuccin/highlightjs@1.0.1/css/catppuccin-mocha.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #1e1e2e; color: #cdd6f4; }
+    header { background: #181825; padding: 10px 20px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid #313244; }
+    header h1 { font-size: 16px; font-weight: 600; color: #89b4fa; }
+    header .current-file { font-size: 13px; color: #a6adc8; font-family: monospace; }
+    .main { flex: 1; display: flex; overflow: hidden; }
+
+    /* File tree sidebar */
+    .sidebar { width: 240px; background: #181825; border-right: 1px solid #313244; overflow-y: auto; flex-shrink: 0; }
+    .sidebar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding: 12px 14px 6px; color: #6c7086; }
+    .file-tree { list-style: none; font-size: 13px; }
+    .file-tree li { cursor: pointer; padding: 4px 14px 4px 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-tree li:hover { background: #313244; }
+    .file-tree li.active { background: #45475a; color: #89b4fa; }
+    .file-tree li .ext { color: #6c7086; font-size: 11px; }
+    .folder-label { padding: 6px 14px 2px; font-size: 12px; font-weight: 600; color: #f9e2af; cursor: pointer; user-select: none; }
+    .folder-label:hover { background: #313244; }
+    .folder-label::before { content: '▸ '; font-size: 10px; }
+    .folder-label.open::before { content: '▾ '; }
+    .folder-contents { display: none; }
+    .folder-contents.open { display: block; }
+
+    /* Left panel: editor */
+    .panel-left { flex: 1; display: flex; flex-direction: column; border-right: 1px solid #313244; min-width: 300px; }
+    .panel-left .panel-header { background: #181825; padding: 8px 14px; font-size: 12px; font-weight: 600; color: #a6adc8; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; }
+    .panel-left .panel-header button { background: #89b4fa; color: #1e1e2e; border: none; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; }
+    .panel-left .panel-header button:hover { background: #74c7ec; }
+    #editor-container { flex: 1; overflow-y: auto; background: #1e1e2e; }
+    #editor-container .ql-toolbar { background: #181825; border-color: #313244 !important; }
+    #editor-container .ql-toolbar .ql-stroke { stroke: #a6adc8; }
+    #editor-container .ql-toolbar .ql-fill { fill: #a6adc8; }
+    #editor-container .ql-toolbar .ql-picker-label { color: #a6adc8; }
+    #editor-container .ql-container { border-color: #313244 !important; font-size: 14px; }
+    #editor-container .ql-editor { color: #cdd6f4; min-height: 200px; }
+    #editor-container .ql-editor.ql-blank::before { color: #6c7086; }
+
+    /* Right panel: code viewer */
+    .panel-right { flex: 1; display: flex; flex-direction: column; min-width: 300px; }
+    .panel-right .panel-header { background: #181825; padding: 8px 14px; font-size: 12px; font-weight: 600; color: #a6adc8; border-bottom: 1px solid #313244; display: flex; gap: 8px; }
+    .tab { padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; color: #6c7086; }
+    .tab:hover { background: #313244; }
+    .tab.active { background: #45475a; color: #cdd6f4; }
+    #code-viewer { flex: 1; background: #1e1e2e; overflow: auto; padding: 0; }
+    #code-viewer pre { margin: 0; padding: 0; background: #1e1e2e !important; }
+    #code-viewer pre code { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.5; tab-size: 4; background: transparent !important; }
+    #code-viewer table.hljs-ln { border-collapse: collapse; width: 100%; }
+    #code-viewer .hljs-ln-numbers { user-select: none; text-align: right; padding-right: 16px; padding-left: 8px; color: #45475a; vertical-align: top; width: 1%; white-space: nowrap; }
+    #code-viewer .hljs-ln-code { padding-left: 12px; }
+
+    /* Resize handle */
+    .resize-handle { width: 4px; background: #313244; cursor: col-resize; flex-shrink: 0; }
+    .resize-handle:hover { background: #89b4fa; }
+
+    .no-file { display: flex; align-items: center; justify-content: center; height: 100%; color: #6c7086; font-size: 14px; }
+
+    /* Doxygen import banner */
+    #import-banner { display: none; background: #313244; border: 1px solid #45475a; border-radius: 8px; margin: 12px; padding: 14px 18px; font-size: 13px; color: #cdd6f4; }
+    #import-banner strong { color: #89b4fa; }
+    #import-banner button { border: none; padding: 5px 14px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; margin-left: 8px; }
+    #import-banner .btn-import { background: #89b4fa; color: #1e1e2e; }
+    #import-banner .btn-import:hover { background: #74c7ec; }
+    #import-banner .btn-skip { background: #45475a; color: #cdd6f4; }
+    #import-banner .btn-skip:hover { background: #585b70; }
+
+    /* Code selection link tooltip */
+    #code-link-tooltip { position: absolute; display: none; background: #89b4fa; color: #1e1e2e; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 6px; cursor: pointer; z-index: 100; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,0.4); transform: translateX(-50%); }
+    #code-link-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #89b4fa; }
+    #code-link-tooltip:hover { background: #74c7ec; }
+    #code-link-tooltip::after:hover { border-top-color: #74c7ec; }
+    #code-viewer .hljs-ln-code.line-selected { background: rgba(137, 180, 250, 0.12); }
+
+    /* Annotate modal */
+    .annotate-btn { background: #a6e3a1; color: #1e1e2e; border: none; padding: 4px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; margin-left: auto; }
+    .annotate-btn:hover { background: #94e2d5; }
+    .annotate-btn:disabled { opacity: 0.4; cursor: default; }
+    #annotate-modal { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.6); align-items: center; justify-content: center; }
+    #annotate-modal.open { display: flex; }
+    #annotate-modal .modal-box { background: #1e1e2e; border: 1px solid #45475a; border-radius: 12px; width: 640px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+    #annotate-modal .modal-header { padding: 16px 20px; border-bottom: 1px solid #313244; display: flex; justify-content: space-between; align-items: center; }
+    #annotate-modal .modal-header h2 { font-size: 15px; color: #cdd6f4; font-weight: 600; }
+    #annotate-modal .modal-header .close-btn { background: none; border: none; color: #6c7086; font-size: 18px; cursor: pointer; padding: 4px 8px; }
+    #annotate-modal .modal-header .close-btn:hover { color: #cdd6f4; }
+    #annotate-modal .modal-stats { padding: 12px 20px; background: #181825; font-size: 13px; color: #a6adc8; border-bottom: 1px solid #313244; }
+    #annotate-modal .modal-stats strong { color: #89b4fa; }
+    #annotate-modal .modal-body { flex: 1; overflow-y: auto; padding: 8px 0; }
+    #annotate-modal .ins-item { padding: 6px 20px; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+    #annotate-modal .ins-item:hover { background: #313244; }
+    #annotate-modal .ins-item label { cursor: pointer; flex: 1; display: flex; align-items: center; gap: 8px; }
+    #annotate-modal .ins-kind { font-size: 11px; padding: 2px 6px; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
+    #annotate-modal .ins-kind.file { background: #89b4fa22; color: #89b4fa; }
+    #annotate-modal .ins-kind.class, #annotate-modal .ins-kind.struct { background: #f9e2af22; color: #f9e2af; }
+    #annotate-modal .ins-kind.enum { background: #a6e3a122; color: #a6e3a1; }
+    #annotate-modal .ins-kind.function, #annotate-modal .ins-kind.method { background: #cba6f722; color: #cba6f7; }
+    #annotate-modal .ins-kind.member { background: #fab38722; color: #fab387; }
+    #annotate-modal .ins-kind.trait { background: #94e2d522; color: #94e2d5; }
+    #annotate-modal .ins-kind.impl { background: #74c7ec22; color: #74c7ec; }
+    #annotate-modal .ins-kind.module { background: #f5c2e722; color: #f5c2e7; }
+    #annotate-modal .ins-kind.type, #annotate-modal .ins-kind.const { background: #fab38722; color: #fab387; }
+    #annotate-modal .ins-name { color: #cdd6f4; font-family: monospace; }
+    #annotate-modal .ins-line { color: #6c7086; font-size: 11px; margin-left: auto; }
+    #annotate-modal .modal-footer { padding: 12px 20px; border-top: 1px solid #313244; display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+    #annotate-modal .modal-footer .select-actions { margin-right: auto; font-size: 12px; }
+    #annotate-modal .modal-footer .select-actions a { color: #89b4fa; cursor: pointer; text-decoration: none; margin-right: 8px; }
+    #annotate-modal .modal-footer .select-actions a:hover { text-decoration: underline; }
+    #annotate-modal .modal-footer button { padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
+    #annotate-modal .btn-apply { background: #a6e3a1; color: #1e1e2e; }
+    #annotate-modal .btn-apply:hover { background: #94e2d5; }
+    #annotate-modal .btn-apply:disabled { opacity: 0.4; cursor: default; }
+    #annotate-modal .btn-cancel { background: #45475a; color: #cdd6f4; }
+    #annotate-modal .btn-cancel:hover { background: #585b70; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BehavePlus Code Docs</h1>
+    <span class="current-file" id="current-file-label">Select a file from the sidebar</span>
+  </header>
+  <div class="main">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="panel-left">
+      <div class="panel-header">
+        <span>Documentation Editor</span>
+        <div>
+          <button onclick="exportDocs()">Export JSON</button>
+          <button onclick="saveToServer()">Save to .org</button>
+        </div>
+      </div>
+      <div id="editor-container">
+        <div id="import-banner">
+          This file has no documentation yet. <strong>Import from Doxygen comments?</strong>
+          <button class="btn-import" onclick="importDoxygen()">Import</button>
+          <button class="btn-skip" onclick="dismissBanner()">Skip</button>
+        </div>
+        <div id="editor"></div>
+      </div>
+    </div>
+    <div class="resize-handle" id="resize-handle"></div>
+    <div class="panel-right">
+      <div class="panel-header" id="code-tabs">
+        <div class="tab active" data-ext=".h" onclick="switchTab(this, '.h')">.h Header</div>
+        <div class="tab" data-ext=".cpp" onclick="switchTab(this, '.cpp')">.cpp Source</div>
+        <button class="annotate-btn" id="annotate-btn" onclick="annotateSource()" disabled>Annotate Source</button>
+      </div>
+      <div id="code-viewer" style="position:relative;">
+        <div class="no-file">Select a file to view source code</div>
+        <div id="code-link-tooltip"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Annotate modal -->
+  <div id="annotate-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 id="annotate-modal-title">Annotate Source</h2>
+        <button class="close-btn" onclick="closeAnnotateModal()">&times;</button>
+      </div>
+      <div class="modal-stats" id="annotate-stats"></div>
+      <div class="modal-body" id="annotate-list"></div>
+      <div class="modal-footer">
+        <div class="select-actions">
+          <a onclick="annotateSelectAll(true)">Select All</a>
+          <a onclick="annotateSelectAll(false)">Deselect All</a>
+        </div>
+        <button class="btn-cancel" onclick="closeAnnotateModal()">Cancel</button>
+        <button class="btn-apply" id="annotate-apply-btn" onclick="applyAnnotations()">Apply Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/rust.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlightjs-line-numbers.js/2.8.0/highlightjs-line-numbers.min.js"></script>
+  <script>
+    // --- File tree data ---
+    const files = {
+      'behave': [
+        'behaveRun','behaveUnits','canopy_coefficient_table','chaparralFuel',
+        'client','Contain','ContainAdapter','ContainForce','ContainForceAdapter',
+        'ContainResource','ContainSim','CrownFirebrandProcessor','crown','crownInputs',
+        'fineDeadFuelMoistureTool','fireSize','fuelModels','ignite','igniteInputs',
+        'moistureScenarios','mortality','mortality_equation_table','mortality_inputs',
+        'newext','palmettoGallberry','randfuel','randthread','relativeHumidity',
+        'safety','safeSeparationDistanceCalculator','slopeTool','species_master_table',
+        'spot','spotInputs','surface','surfaceFire','surfaceFireReactionIntensity',
+        'surfaceFuelbedIntermediates','surfaceInputEnums','surfaceInputs',
+        'surfaceTwoFuelModels','vaporPressureDeficitCalculator','westernAspen',
+        'windAdjustmentFactor','windSpeedUtility'
+      ],
+      'rawsBatch': ['behaveRawsBatch'],
+      'spotDistancePile': ['computePileSpottingDistance'],
+      'spotDistanceSurface': ['computeSurfaceSpottingDistance'],
+      'spotDistanceTorchingTrees': ['computeTorchingTreesSpottingDistance'],
+      'testBehave': ['testBehave'],
+      'testMortality': ['mortality_client']
+    };
+
+    // Files that only have .cpp (no .h)
+    const cppOnly = new Set([
+      'client','behaveRawsBatch','computePileSpottingDistance',
+      'computeSurfaceSpottingDistance','computeTorchingTreesSpottingDistance',
+      'testBehave','mortality_client'
+    ]);
+
+    // Files that only have .h (no .cpp)
+    const hOnly = new Set(['surfaceInputEnums']);
+
+    let currentFile = null;
+    let currentExt = '.h';
+    let docsStore = {};
+
+    // Extension labels for tab rendering
+    const extLabels = {
+      '.h': '.h Header', '.hpp': '.hpp Header', '.cpp': '.cpp Source', '.cc': '.cc Source',
+      '.rs': '.rs Rust', '.py': '.py Python'
+    };
+
+    function buildTabs(extensions) {
+      const header = document.getElementById('code-tabs');
+      const btn = document.getElementById('annotate-btn');
+      // Remove old tabs (keep the annotate button)
+      header.querySelectorAll('.tab').forEach(t => t.remove());
+      extensions.forEach((ext, i) => {
+        const tab = document.createElement('div');
+        tab.className = 'tab' + (i === 0 ? ' active' : '');
+        tab.dataset.ext = ext;
+        tab.textContent = extLabels[ext] || ext;
+        tab.onclick = () => switchTab(tab, ext);
+        header.insertBefore(tab, btn);
+      });
+      if (extensions.length > 0) currentExt = extensions[0];
+    }
+    let saveStatus = document.createElement('span');
+    saveStatus.style.cssText = 'font-size:11px;color:#a6e3a1;margin-left:8px;opacity:0;transition:opacity 0.3s';
+
+    // Load docs from server on startup
+    async function loadDocsFromServer() {
+      try {
+        const resp = await fetch('/api/docs');
+        if (resp.ok) {
+          docsStore = await resp.json();
+          // Also cache in localStorage as fallback
+          localStorage.setItem('behave-code-docs', JSON.stringify(docsStore));
+        }
+      } catch (e) {
+        console.warn('Server unavailable, loading from localStorage');
+        docsStore = JSON.parse(localStorage.getItem('behave-code-docs') || '{}');
+      }
+    }
+
+    // --- Init Quill editor ---
+    const quill = new Quill('#editor', {
+      theme: 'snow',
+      placeholder: 'Write documentation for the selected file...',
+      modules: {
+        toolbar: [
+          [{ header: [1, 2, 3, false] }],
+          ['bold', 'italic', 'underline', 'strike'],
+          ['code-block', 'blockquote'],
+          [{ list: 'ordered' }, { list: 'bullet' }],
+          ['link'],
+          ['clean']
+        ]
+      }
+    });
+
+    quill.on('text-change', () => {
+      if (currentFile) {
+        docsStore[currentFile] = quill.root.innerHTML;
+      }
+    });
+
+    // --- Build sidebar ---
+    function buildSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.innerHTML = '<h2>Source Files</h2>';
+
+      for (const [folder, fileList] of Object.entries(files)) {
+        const folderEl = document.createElement('div');
+        folderEl.className = 'folder-label open';
+        folderEl.textContent = folder + '/';
+        folderEl.onclick = () => {
+          folderEl.classList.toggle('open');
+          folderEl.nextElementSibling.classList.toggle('open');
+        };
+        sidebar.appendChild(folderEl);
+
+        const ul = document.createElement('ul');
+        ul.className = 'file-tree folder-contents open';
+        for (const f of fileList) {
+          const li = document.createElement('li');
+          const hasH = !cppOnly.has(f);
+          const hasCpp = !hOnly.has(f);
+          let label = f;
+          let exts = [];
+          if (hasH) exts.push('.h');
+          if (hasCpp) exts.push('.cpp');
+          li.innerHTML = `${f} <span class="ext">${exts.join(' ')}</span>`;
+          li.dataset.folder = folder;
+          li.dataset.file = f;
+          li.onclick = () => selectFile(folder, f, li);
+          ul.appendChild(li);
+        }
+        sidebar.appendChild(ul);
+      }
+    }
+
+    // --- File selection ---
+    function selectFile(folder, file, el) {
+      // Save current doc
+      saveCurrent();
+
+      document.querySelectorAll('.file-tree li').forEach(li => li.classList.remove('active'));
+      el.classList.add('active');
+
+      currentFile = `${folder}/${file}`;
+      document.getElementById('current-file-label').textContent = currentFile;
+
+      // Load doc for this file
+      const banner = document.getElementById('import-banner');
+      if (docsStore[currentFile]) {
+        quill.root.innerHTML = docsStore[currentFile];
+        banner.style.display = 'none';
+      } else {
+        quill.setText('');
+        banner.style.display = 'block';
+      }
+
+      // Determine available extensions for this file
+      const hasH = !cppOnly.has(file);
+      const hasCpp = !hOnly.has(file);
+      // Check for .rs / .py files via fetch (or use static data if available)
+      const exts = [];
+      if (hasH) exts.push('.h');
+      if (hasCpp) exts.push('.cpp');
+      // For files with non-C++ extensions, detect from folder contents
+      // (The sidebar currently only has C++ files; .rs/.py files use their native ext)
+      buildTabs(exts);
+
+      if (!exts.includes(currentExt) && exts.length > 0) currentExt = exts[0];
+
+      loadCode(folder, file, currentExt);
+      updateAnnotateButton();
+    }
+
+    // --- Load source code into viewer ---
+    async function loadCode(folder, file, ext, scrollToLines) {
+      const viewer = document.getElementById('code-viewer');
+      const path = `/src/${folder}/${file}${ext}`;
+
+      try {
+        const resp = await fetch(path);
+        if (!resp.ok) {
+          viewer.innerHTML = `<div class="no-file">File not found: ${folder}/${file}${ext}</div>`;
+          return;
+        }
+        const text = await resp.text();
+        const escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const extToLang = {'.h':'cpp','.hpp':'cpp','.cpp':'cpp','.cc':'cpp','.rs':'rust','.py':'python'};
+        const hljsLang = extToLang[ext] || 'cpp';
+        viewer.innerHTML = `<pre><code class="language-${hljsLang}">${escaped}</code></pre><div id="code-link-tooltip"></div>`;
+        const codeEl = viewer.querySelector('code');
+        hljs.highlightElement(codeEl);
+        hljs.lineNumbersBlock(codeEl);
+        if (scrollToLines) {
+          // hljs-line-numbers renders async; poll until the table exists
+          const poll = setInterval(() => {
+            const table = viewer.querySelector('table.hljs-ln');
+            if (!table) return;
+            clearInterval(poll);
+            highlightAndScroll(scrollToLines[0], scrollToLines[1], true);
+          }, 50);
+          setTimeout(() => clearInterval(poll), 3000);
+        }
+      } catch (e) {
+        viewer.innerHTML = `<div class="no-file">Could not load file: ${e.message}</div>`;
+      }
+    }
+
+    function highlightAndScroll(startLine, endLine, scroll) {
+      document.querySelectorAll('.line-selected').forEach(el => el.classList.remove('line-selected'));
+      let firstRow = null;
+      document.querySelectorAll('.hljs-ln-numbers').forEach(numCell => {
+        const ln = parseInt(numCell.dataset.lineNumber || numCell.textContent, 10);
+        if (ln >= startLine && ln <= endLine) {
+          const codeCell = numCell.closest('tr')?.querySelector('.hljs-ln-code');
+          if (codeCell) codeCell.classList.add('line-selected');
+          if (!firstRow) firstRow = numCell.closest('tr');
+        }
+      });
+      if (scroll && firstRow) {
+        firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    // --- Tab switching ---
+    function switchTab(el, ext) {
+      if (!currentFile) return;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      currentExt = ext;
+
+      const folder = currentFile.split('/')[0];
+      const file = currentFile.split('/').pop();
+      loadCode(folder, file, ext);
+    }
+
+    // --- Save / Export ---
+    function flashStatus(msg, color) {
+      saveStatus.textContent = msg;
+      saveStatus.style.color = color || '#a6e3a1';
+      saveStatus.style.opacity = '1';
+      setTimeout(() => { saveStatus.style.opacity = '0'; }, 2000);
+    }
+
+    function saveCurrent() {
+      if (currentFile && quill.getText().trim()) {
+        docsStore[currentFile] = quill.root.innerHTML;
+      }
+      localStorage.setItem('behave-code-docs', JSON.stringify(docsStore));
+    }
+
+    async function saveToServer() {
+      saveCurrent();
+      try {
+        const resp = await fetch('/api/docs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(docsStore)
+        });
+        if (resp.ok) {
+          flashStatus('Saved to behave.org', '#a6e3a1');
+        } else {
+          flashStatus('Save failed!', '#f38ba8');
+        }
+      } catch (e) {
+        flashStatus('Server offline — saved locally', '#f9e2af');
+      }
+    }
+
+    function exportDocs() {
+      saveCurrent();
+      const blob = new Blob([JSON.stringify(docsStore, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'behave-code-docs.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // --- Doxygen import ---
+    async function importDoxygen() {
+      if (!currentFile) return;
+      const [folder, file] = currentFile.split('/');
+      const banner = document.getElementById('import-banner');
+      banner.innerHTML = 'Importing Doxygen documentation...';
+      try {
+        const resp = await fetch('/api/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder, file })
+        });
+        if (!resp.ok) throw new Error('Parse failed');
+        const data = await resp.json();
+        if (data.html && data.html.trim()) {
+          quill.root.innerHTML = data.html;
+          docsStore[currentFile] = data.html;
+          saveCurrent();
+          flashStatus('Imported from Doxygen', '#a6e3a1');
+        } else {
+          quill.setText('');
+          flashStatus('No Doxygen docs found', '#f9e2af');
+        }
+      } catch (e) {
+        flashStatus('Import failed: ' + e.message, '#f38ba8');
+      }
+      banner.style.display = 'none';
+    }
+
+    function dismissBanner() {
+      document.getElementById('import-banner').style.display = 'none';
+    }
+
+    // --- Code selection → link ---
+    let pendingLink = null;
+    function getTooltip() { return document.getElementById('code-link-tooltip'); }
+
+    function lineNumberFromNode(node) {
+      // Walk up from a text/element node to find the enclosing table row,
+      // then read the line number from the first cell.
+      let el = node.nodeType === 3 ? node.parentElement : node;
+      while (el && el.id !== 'code-viewer') {
+        if (el.tagName === 'TR') {
+          const numCell = el.querySelector('.hljs-ln-numbers');
+          if (numCell) return parseInt(numCell.dataset.lineNumber || numCell.textContent, 10);
+        }
+        el = el.parentElement;
+      }
+      return null;
+    }
+
+    document.getElementById('code-viewer').addEventListener('mouseup', (e) => {
+      if (!currentFile) return;
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) { hideTooltip(); return; }
+
+      const range = sel.getRangeAt(0);
+      const startLine = lineNumberFromNode(range.startContainer);
+      const endLine = lineNumberFromNode(range.endContainer);
+      if (!startLine) { hideTooltip(); return; }
+
+      const lo = Math.min(startLine, endLine || startLine);
+      const hi = Math.max(startLine, endLine || startLine);
+      const fileName = currentFile.split('/').pop() + currentExt;
+      const lineLabel = lo === hi ? `L${lo}` : `L${lo}\u2013${hi}`;
+      const lineRef = lo === hi ? `${lo}` : `${lo}-${hi}`;
+
+      pendingLink = {
+        href: `file:src/${currentFile}${currentExt}::${lineRef}`,
+        text: `${fileName}:${lineRef}`
+      };
+
+      // Highlight selected lines
+      highlightAndScroll(lo, hi);
+
+      // Position tooltip above selection
+      const tt = getTooltip();
+      if (!tt) return;
+      const viewer = document.getElementById('code-viewer');
+      const viewerRect = viewer.getBoundingClientRect();
+      const rangeRect = range.getBoundingClientRect();
+      tt.textContent = `Link ${lineLabel} to docs`;
+      tt.style.display = 'block';
+      tt.style.left = (rangeRect.left + rangeRect.width / 2 - viewerRect.left + viewer.scrollLeft) + 'px';
+      tt.style.top = (rangeRect.top - viewerRect.top + viewer.scrollTop - 36) + 'px';
+    });
+
+    function hideTooltip() {
+      const tt = getTooltip();
+      if (tt) tt.style.display = 'none';
+      pendingLink = null;
+      document.querySelectorAll('.line-selected').forEach(el => el.classList.remove('line-selected'));
+    }
+
+    // Use event delegation for tooltip clicks (since it gets recreated on loadCode)
+    document.getElementById('code-viewer').addEventListener('click', (e) => {
+      if (!e.target.closest('#code-link-tooltip')) return;
+      e.stopPropagation();
+      if (!pendingLink || !currentFile) return;
+
+      const cursorPos = quill.getSelection()?.index ?? quill.getLength() - 1;
+      quill.insertText(cursorPos, pendingLink.text, 'link', pendingLink.href);
+      quill.insertText(cursorPos + pendingLink.text.length, ' ');
+      quill.setSelection(cursorPos + pendingLink.text.length + 1);
+
+      window.getSelection().removeAllRanges();
+      hideTooltip();
+      flashStatus('Code link inserted', '#89b4fa');
+    });
+
+    // Dismiss tooltip when clicking elsewhere or scrolling
+    document.addEventListener('mousedown', (e) => {
+      const tt = getTooltip();
+      if (tt && e.target !== tt && !tt.contains(e.target)) hideTooltip();
+    });
+    document.getElementById('code-viewer').addEventListener('scroll', hideTooltip);
+
+    // --- Navigate to code from link ---
+    // Parses paths like: "src/behave/crown.h::45-62" or "#/src/behave/crown.h:L45-62"
+    function parseCodeLink(href) {
+      // file:src/behave/crown.h::45-62  (Org-style, stored in Quill)
+      // #/src/behave/crown.h:L45-62     (hash URL style)
+      // #/src/behave/crown.h            (hash URL, no lines)
+      let m = href.match(/^(?:file:)?src\/(.+?)\.(h|hpp|cpp|cc|rs|py)::(\d+)(?:-(\d+))?$/);
+      if (!m) m = href.match(/^#?\/src\/(.+?)\.(h|hpp|cpp|cc|rs|py):L(\d+)(?:-(\d+))?$/);
+      if (!m) m = href.match(/^#?\/src\/(.+?)\.(h|hpp|cpp|cc|rs|py)$/);
+      if (!m) return null;
+      const fullPath = m[1]; // e.g. "behave/crown"
+      const ext = '.' + m[2];
+      const startLine = m[3] ? parseInt(m[3], 10) : null;
+      const endLine = m[4] ? parseInt(m[4], 10) : startLine;
+      const parts = fullPath.split('/');
+      const folder = parts.slice(0, -1).join('/');
+      const file = parts[parts.length - 1];
+      return { folder, file, ext, startLine, endLine };
+    }
+
+    function navigateToCode(parsed) {
+      if (!parsed) return;
+      const { folder, file, ext, startLine, endLine } = parsed;
+
+      // Find and click the sidebar entry
+      const li = document.querySelector(`.file-tree li[data-folder="${folder}"][data-file="${file}"]`);
+      if (!li) return;
+
+      // Ensure the folder is open
+      const folderContents = li.closest('.folder-contents');
+      if (folderContents && !folderContents.classList.contains('open')) {
+        folderContents.classList.add('open');
+        folderContents.previousElementSibling?.classList.add('open');
+      }
+
+      saveCurrent();
+      document.querySelectorAll('.file-tree li').forEach(l => l.classList.remove('active'));
+      li.classList.add('active');
+
+      currentFile = `${folder}/${file}`;
+      currentExt = ext;
+      document.getElementById('current-file-label').textContent = currentFile;
+
+      if (docsStore[currentFile]) {
+        quill.root.innerHTML = docsStore[currentFile];
+      } else {
+        quill.setText('');
+      }
+
+      // Update tabs
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.remove('active');
+        if (t.dataset.ext === ext) t.classList.add('active');
+      });
+
+      // Update hash without triggering hashchange
+      if (startLine) {
+        const lineRef = startLine === endLine ? `${startLine}` : `${startLine}-${endLine}`;
+        history.replaceState(null, '', `#/src/${folder}/${file}${ext}:L${lineRef}`);
+      } else {
+        history.replaceState(null, '', `#/src/${folder}/${file}${ext}`);
+      }
+
+      loadCode(folder, file, ext, startLine ? [startLine, endLine] : null);
+    }
+
+    // Intercept link clicks in the Quill editor
+    document.querySelector('.ql-editor')?.addEventListener('click', (e) => {
+      const link = e.target.closest('a');
+      if (!link) return;
+      const href = link.getAttribute('href');
+      if (!href) return;
+      const parsed = parseCodeLink(href);
+      if (parsed) {
+        e.preventDefault();
+        navigateToCode(parsed);
+      }
+    });
+
+    // Handle hash-based URL navigation
+    function handleHash() {
+      const hash = window.location.hash;
+      if (!hash) return;
+      const parsed = parseCodeLink(hash);
+      if (parsed) navigateToCode(parsed);
+    }
+    window.addEventListener('hashchange', handleHash);
+
+    // --- Resize handle ---
+    const handle = document.getElementById('resize-handle');
+    let dragging = false;
+    handle.addEventListener('mousedown', () => { dragging = true; document.body.style.cursor = 'col-resize'; });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const left = document.querySelector('.panel-left');
+      const main = document.querySelector('.main');
+      const sidebar = document.querySelector('.sidebar');
+      const minW = 250;
+      const newW = e.clientX - sidebar.offsetWidth;
+      if (newW > minW && newW < main.offsetWidth - sidebar.offsetWidth - minW) {
+        left.style.flex = 'none';
+        left.style.width = newW + 'px';
+      }
+    });
+    document.addEventListener('mouseup', () => { dragging = false; document.body.style.cursor = ''; });
+
+    // Auto-save periodically
+    setInterval(saveCurrent, 10000);
+
+    // --- Annotate Source ---
+    let annotateData = null;
+
+    function updateAnnotateButton() {
+      const btn = document.getElementById('annotate-btn');
+      btn.disabled = !currentFile;
+    }
+
+    async function annotateSource() {
+      if (!currentFile) return;
+      const [folder, file] = currentFile.split('/');
+      const btn = document.getElementById('annotate-btn');
+      btn.textContent = 'Scanning...';
+      btn.disabled = true;
+
+      try {
+        const resp = await fetch('/api/annotate/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder, file, ext: currentExt })
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.error || 'Preview failed');
+        }
+        annotateData = await resp.json();
+        showAnnotateModal();
+      } catch (e) {
+        flashStatus('Annotate failed: ' + e.message, '#f38ba8');
+      } finally {
+        btn.textContent = 'Annotate Source';
+        btn.disabled = false;
+      }
+    }
+
+    function showAnnotateModal() {
+      if (!annotateData) return;
+      const modal = document.getElementById('annotate-modal');
+      const stats = annotateData.stats;
+      const title = document.getElementById('annotate-modal-title');
+      title.textContent = 'Annotate: ' + annotateData.file;
+
+      document.getElementById('annotate-stats').innerHTML =
+        `<strong>${stats.total}</strong> constructs found, ` +
+        `<strong>${stats.documented}</strong> already documented, ` +
+        `<strong>${stats['to-annotate'] || stats.to_annotate || 0}</strong> to annotate`;
+
+      const list = document.getElementById('annotate-list');
+      if (!annotateData.insertions || annotateData.insertions.length === 0) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:#a6adc8;">All constructs are already documented!</div>';
+        document.getElementById('annotate-apply-btn').disabled = true;
+      } else {
+        list.innerHTML = annotateData.insertions.map((ins, i) => {
+          const kind = ins.kind || ins[':kind'] || 'unknown';
+          const name = ins['target-name'] || ins.target_name || '';
+          const line = ins['before-line'] || ins.before_line || '';
+          return `<div class="ins-item">
+            <label><input type="checkbox" checked data-idx="${i}">
+              <span class="ins-kind ${kind}">${kind}</span>
+              <span class="ins-name">${name}</span>
+            </label>
+            <span class="ins-line">L${line}</span>
+          </div>`;
+        }).join('');
+        document.getElementById('annotate-apply-btn').disabled = false;
+      }
+      modal.classList.add('open');
+    }
+
+    function closeAnnotateModal() {
+      document.getElementById('annotate-modal').classList.remove('open');
+      annotateData = null;
+    }
+
+    function annotateSelectAll(checked) {
+      document.querySelectorAll('#annotate-list input[type="checkbox"]').forEach(cb => {
+        cb.checked = checked;
+      });
+    }
+
+    async function applyAnnotations() {
+      if (!annotateData || !currentFile) return;
+      const [folder, file] = currentFile.split('/');
+      const checkboxes = document.querySelectorAll('#annotate-list input[type="checkbox"]');
+      const selected = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          selected.push(annotateData.insertions[parseInt(cb.dataset.idx)]);
+        }
+      });
+      if (selected.length === 0) {
+        flashStatus('No insertions selected', '#f9e2af');
+        return;
+      }
+
+      const applyBtn = document.getElementById('annotate-apply-btn');
+      applyBtn.textContent = 'Applying...';
+      applyBtn.disabled = true;
+
+      try {
+        const resp = await fetch('/api/annotate/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder,
+            file,
+            ext: currentExt,
+            insertions: selected,
+            hash: annotateData.hash
+          })
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.error || 'Apply failed');
+        }
+        const result = await resp.json();
+        closeAnnotateModal();
+        flashStatus(`Added ${result['lines-added'] || result.lines_added || 0} lines of Doxygen templates`, '#a6e3a1');
+        // Reload the source view
+        loadCode(folder, file, currentExt);
+      } catch (e) {
+        flashStatus('Apply failed: ' + e.message, '#f38ba8');
+        applyBtn.textContent = 'Apply Selected';
+        applyBtn.disabled = false;
+      }
+    }
+
+    // Close modal on backdrop click
+    document.getElementById('annotate-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeAnnotateModal();
+    });
+
+    // Build UI and load docs from server
+    buildSidebar();
+    loadDocsFromServer().then(() => {
+      document.querySelector('.panel-left .panel-header div').appendChild(saveStatus);
+      // Navigate to hash link if present in URL
+      handleHash();
+    });
+  </script>
+</body>
+</html>
