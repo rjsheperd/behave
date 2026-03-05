@@ -1,0 +1,9 @@
+[package]
+name = "behave-crown"
+version = "0.1.0"
+edition = "2021"
+description = "Crown fire behavior for BehavePlus Rust port"
+
+[dependencies]
+firelab-base = { path = "../firelab-base" }
+behave-surface = { path = "../behave-surface" }

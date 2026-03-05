@@ -1,0 +1,8 @@
+[package]
+name = "behave-contain"
+version = "0.1.0"
+edition = "2021"
+description = "Fire containment simulation for BehavePlus Rust port"
+
+[dependencies]
+firelab-base = { path = "../firelab-base" }

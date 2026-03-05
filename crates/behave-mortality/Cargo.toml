@@ -1,0 +1,8 @@
+[package]
+name = "behave-mortality"
+version = "0.1.0"
+edition = "2021"
+description = "Tree mortality calculations for BehavePlus Rust port"
+
+[dependencies]
+firelab-base = { path = "../firelab-base" }

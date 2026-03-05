@@ -1,0 +1,8 @@
+[package]
+name = "behave-ignite"
+version = "0.1.0"
+edition = "2021"
+description = "Ignition probability calculations for BehavePlus Rust port"
+
+[dependencies]
+firelab-base = { path = "../firelab-base" }

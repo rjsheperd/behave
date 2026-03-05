@@ -1,0 +1,12 @@
+[package]
+name = "behave-spot"
+version = "0.1.0"
+edition = "2021"
+description = "Spot fire distance calculations for BehavePlus Rust port"
+
+[dependencies]
+firelab-base = { path = "../firelab-base" }
+behave-crown = { path = "../behave-crown" }
+
+[dev-dependencies]
+behave-surface = { path = "../behave-surface" }

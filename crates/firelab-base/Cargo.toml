@@ -1,0 +1,5 @@
+[package]
+name = "firelab-base"
+version = "0.1.0"
+edition = "2021"
+description = "Units, cross-crate enums, and error types for BehavePlus Rust port"

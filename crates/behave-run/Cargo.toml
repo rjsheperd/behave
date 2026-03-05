@@ -1,0 +1,15 @@
+[package]
+name = "behave-run"
+version = "0.1.0"
+edition = "2021"
+description = "Top-level facade tying together all BehavePlus modules"
+
+[dependencies]
+firelab-base = { path = "../firelab-base" }
+behave-surface = { path = "../behave-surface" }
+behave-crown = { path = "../behave-crown" }
+behave-spot = { path = "../behave-spot" }
+behave-ignite = { path = "../behave-ignite" }
+behave-contain = { path = "../behave-contain" }
+behave-mortality = { path = "../behave-mortality" }
+behave-weather = { path = "../behave-weather" }

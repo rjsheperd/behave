@@ -1,0 +1,8 @@
+[package]
+name = "behave-weather"
+version = "0.1.0"
+edition = "2021"
+description = "Weather and environmental tools for BehavePlus Rust port"
+
+[dependencies]
+firelab-base = { path = "../firelab-base" }

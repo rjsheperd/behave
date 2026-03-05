@@ -1,0 +1,8 @@
+[package]
+name = "behave-surface"
+version = "0.1.0"
+edition = "2021"
+description = "Surface fire spread (Rothermel engine) for BehavePlus Rust port"
+
+[dependencies]
+firelab-base = { path = "../firelab-base" }
