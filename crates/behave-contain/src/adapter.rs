@@ -5,7 +5,7 @@
 //! Provides a high-level interface for configuring and running containment
 //! simulations with unit conversions.
 
-use firelab_base::{AreaUnits, LengthUnits, SpeedUnits, TimeUnits, UnitConversion};
+use firelab_base::{AreaUnits, FireSize, LengthUnits, SpeedUnits, TimeUnits, UnitConversion};
 
 use crate::algorithm::{ContainStatus, ContainTactic};
 use crate::force::ContainForce;
@@ -217,48 +217,43 @@ impl ContainAdapter {
         }
 
         // Calculate perimeter and size at initial attack using fire geometry
-        self.calculate_initial_attack_geometry(report_rate, &sim);
+        self.calculate_initial_attack_geometry(report_rate);
     }
 
-    fn calculate_initial_attack_geometry(&mut self, report_rate: f64, _sim: &ContainSim) {
-        // Convert report rate from ch/h to ft/min for calculations
-        let report_rate_ft_min = SpeedUnits::ChainsPerHour.to_base(report_rate);
+    fn calculate_initial_attack_geometry(&mut self, report_rate: f64) {
+        // Effective windspeed back-computed from the L/W ratio (lw ≈ 1 + U/4),
+        // fed through the FireSize module to build the fire ellipse; the
+        // elapsed time at which that ellipse reaches the reported size, plus
+        // the first resource arrival, gives the moment of initial attack.
+        let effective_windspeed = 4.0 * (self.lw_ratio - 1.0); // mph
+        let mut size = FireSize::new();
+        size.calculate_fire_basic_dimensions(
+            false,
+            effective_windspeed,
+            SpeedUnits::MilesPerHour,
+            report_rate,
+            SpeedUnits::ChainsPerHour,
+        );
 
-        // Elliptical dimensions using Anderson (1983) approximation
-        // Length = 0.5 * (1 + eps) * rate * time  (semi-major in heading direction)
-        // Width = length / lwRatio
-        // Using 1-minute base dimensions:
-        let lw = self.lw_ratio;
-        if lw < 1.0001 {
-            self.perimeter_at_initial_attack = 0.0;
-            self.fire_size_at_initial_attack = 0.0;
-            return;
-        }
-
-        // Elliptical semi-axes from the fire size module logic
-        // For 1 minute elapsed: a = rate * 1min (in ft), b = a / lw
-        let elliptical_a = report_rate_ft_min; // ft per minute
-        let elliptical_b = elliptical_a / lw;
+        // Base elliptical dimensions (per minute of growth, in ft)
+        let elliptical_a = size.elliptical_a(LengthUnits::Feet, 1.0, TimeUnits::Minutes);
+        let elliptical_b = size.elliptical_b(LengthUnits::Feet, 1.0, TimeUnits::Minutes);
 
         let report_size_sq_ft = AreaUnits::Acres.to_base(self.report_size);
+        self.perimeter_at_initial_attack = 0.0;
+        self.fire_size_at_initial_attack = 0.0;
         let denominator = std::f64::consts::PI * elliptical_a * elliptical_b;
 
         let first_arrival_time = self.force.first_arrival(ContainFlank::LeftFlank).max(0.0);
 
         if denominator > 1.0e-07 {
+            // s = sqrt(A / (pi*a*b)), assuming constant rate of growth
             let initial_elapsed = (report_size_sq_ft / denominator).sqrt();
             let total_elapsed = initial_elapsed + first_arrival_time;
-
-            // Perimeter at initial attack (Ramanujan approximation)
-            let a_t = elliptical_a * total_elapsed;
-            let b_t = elliptical_b * total_elapsed;
-            let h = ((a_t - b_t) / (a_t + b_t)).powi(2);
             self.perimeter_at_initial_attack =
-                std::f64::consts::PI * (a_t + b_t) * (1.0 + 3.0 * h / (10.0 + (4.0 - 3.0 * h).sqrt()));
-
-            // Area at initial attack
+                size.fire_perimeter(false, LengthUnits::Feet, total_elapsed, TimeUnits::Minutes);
             self.fire_size_at_initial_attack =
-                std::f64::consts::PI * a_t * b_t;
+                size.fire_area(false, AreaUnits::SquareFeet, total_elapsed, TimeUnits::Minutes);
         }
     }
 

@@ -8,6 +8,7 @@
 #![allow(dead_code)]
 
 pub mod chaparral;
+pub mod exrate;
 pub mod facade;
 pub mod fire;
 pub mod fire_size;

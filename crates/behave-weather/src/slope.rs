@@ -113,9 +113,12 @@ impl SlopeTool {
     ) {
         self.max_slope_degrees = slope_units.to_base(max_slope_steepness);
 
-        let ground_distance_inches = LengthUnits::Inches.from_base(
-            distance_units.to_base(map_distance),
-        );
+        // C++ quirk preserved (slopeTool.cpp:140): the map distance is
+        // converted to inches AS IF it were already in base units (feet);
+        // `distance_units` is computed into groundDistanceInFeet in the C++
+        // but never used. BehavePlus 6's published outputs bake this in.
+        let _ = distance_units;
+        let ground_distance_inches = LengthUnits::Inches.from_base(map_distance);
 
         let slope_rad = self.max_slope_degrees * PI / 180.0;
 
@@ -348,9 +351,12 @@ mod tests {
             SlopeUnits::Percent,
         );
 
+        // Expected values in FEET, per testBehave.cpp (the C++ treats the
+        // 3.0 in map distance as feet when converting to inches — see the
+        // quirk note in calculate_horizontal_distance).
         let expected = [2.9, 2.9, 2.9, 2.9, 3.0, 3.0, 3.0];
         for i in 0..7 {
-            let dist = tool.get_horizontal_distance_at_index(i, LengthUnits::Inches);
+            let dist = tool.get_horizontal_distance_at_index(i, LengthUnits::Feet);
             assert!(
                 (dist - expected[i]).abs() < 0.1,
                 "index {i}: expected ~{}, got {dist}",

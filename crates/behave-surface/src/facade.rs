@@ -195,12 +195,37 @@ impl Surface {
         length_units.from_base(self.fire.spread_rate() * t)
     }
 
+    pub fn backing_spread_distance(
+        &self,
+        length_units: LengthUnits,
+        elapsed_time: f64,
+        time_units: TimeUnits,
+    ) -> f64 {
+        let t = time_units.to_base(elapsed_time);
+        length_units.from_base(self.size.backing_spread_rate(SpeedUnits::FeetPerMinute) * t)
+    }
+
+    pub fn flanking_spread_distance(
+        &self,
+        length_units: LengthUnits,
+        elapsed_time: f64,
+        time_units: TimeUnits,
+    ) -> f64 {
+        let t = time_units.to_base(elapsed_time);
+        length_units.from_base(self.size.flanking_spread_rate(SpeedUnits::FeetPerMinute) * t)
+    }
+
     pub fn direction_of_max_spread(&self) -> f64 {
         self.fire.direction_of_max_spread()
     }
 
     pub fn flame_length_output(&self, units: LengthUnits) -> f64 {
         units.from_base(self.fire.flame_length())
+    }
+
+    /// C++ method: `getAspenMortality`
+    pub fn get_aspen_mortality(&self, units: FractionUnits) -> f64 {
+        units.from_base(self.fire.aspen_mortality())
     }
 
     pub fn backing_flame_length(&self, units: LengthUnits) -> f64 {

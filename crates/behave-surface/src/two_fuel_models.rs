@@ -357,9 +357,22 @@ impl TwoFuelModels {
                 }
             }
             TwoFuelModelsMethod::TwoDimensional => {
-                // Finney's 2D expected spread rate requires EXRATE package
-                // (RandFuel, RandThread, NewExt). Stubbed for now.
-                todo!("TwoDimensional method requires EXRATE package port")
+                // Finney's 2D expected spread rate (EXRATE package).
+                // Using the second fuel model's length-to-width ratio agrees
+                // with BehavePlus (C++ surfaceTwoFuelModels.cpp:334); the
+                // samples/depth/laterals values come from behavePlus.xml.
+                let lb_ratio = self.length_to_width_ratio[SECOND];
+                let samples = 2;
+                let depth = 2;
+                let laterals = 0;
+                self.spread_rate = crate::exrate::surface_fire_expected_spread_rate(
+                    &self.ros,
+                    &self.coverage,
+                    lb_ratio,
+                    samples,
+                    depth,
+                    laterals,
+                );
             }
             TwoFuelModelsMethod::NoMethod => {
                 // No blending

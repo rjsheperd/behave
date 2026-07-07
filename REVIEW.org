@@ -1,0 +1,426 @@
+#+TITLE: Behave Rust Port — Architecture & Code Review + Parallelization Roadmap
+#+AUTHOR: Claude (review synthesis) / RJ Sheperd
+#+DATE: 2026-07-06
+#+STARTUP: overview
+#+OPTIONS: toc:3 num:nil
+
+* Executive Summary
+
+The Rust port (~19,300 lines across 9 workspace crates, branch =rj-rust-port=) is a
+*faithful, near-complete translation* of the C++ Behave library (~28,000 lines,
+=src/behave/=). Five parallel review passes (three numerical-fidelity reviews, one
+architecture review, one parallelization-readiness analysis) found:
+
+- *Numerical fidelity is high across all crates.* Constants, table data, and
+  equation structure were verified bit-for-bit across surface (Rothermel core,
+  100+ fuel models, chaparral/palmetto/aspen), mortality (197-species master
+  table), containment (Fried & Fried stepping), weather tools, units, fire-size
+  geometry, crown (Rothermel + Scott & Reinhardt), spot (all 4 sources, 14
+  species), and ignite. Zero critical/high/medium fidelity findings.
+- *All 82 C++ library files have Rust homes.* Crate dependency graph is a clean
+  DAG; zero =unsafe=, zero panics in library code.
+- *The single biggest gap was verification, not code*: 279 unit tests but no
+  golden-value parity tests. *Now addressed*: =crates/behave-run/tests/parity.rs=
+  replays the full =testBehave.cpp= sequence (154 golden checks, all passing).
+  Landing it immediately exposed and corrected review findings — see
+  [[*Parity suite results (2026-07-06)][Parity suite results]].
+- The port *intentionally fixes two C++ bugs* in =ignite= (see
+  [[*behave-ignite][behave-ignite]]) — exact-parity tests will legitimately diverge there.
+- *Parallelization outlook*: rayon batching is nearly free today; SIMD needs an
+  AoS→SoA batch layer; GPU (WebGPU) is viable for surface/crown/spot/ignite/
+  mortality but requires an f32 precision study and divergence handling; the
+  containment simulator should stay on CPU. BLAS is *not* a fit (see
+  [[*Why not BLAS][Why not BLAS]]).
+
+Verdict: *ready for internal use after a parity-test suite is added*; the
+parallel/GPU work is a refactor of the API surface (pure kernels + batch
+layout), not a rewrite of the math.
+
+* Review Methodology
+
+- Baseline: =cargo build --workspace= clean; =cargo test --workspace= — *279/279
+  tests pass* (129 surface, 43 base, 38 mortality, 20 crown, 15 contain, 13
+  spot, 12 ignite, 7 weather, 2 run).
+- Five independent review agents:
+  1. Surface crate fidelity vs. C++ (=surfaceFire=, =fuelbed=, fuel model tables, …)
+  2. Crown / Spot / Ignite fidelity
+  3. Mortality / Contain / Weather / firelab-base fidelity
+  4. Workspace architecture (completeness, crate boundaries, API, errors, tests)
+  5. Parallelization readiness (purity, layout, branching, transcendentals, loops)
+
+* Architecture Review
+
+** Crate decomposition
+
+#+begin_example
+firelab-base (foundation: units, enums, error, fire_size — no deps)
+  ├── behave-surface  (~4,700 loc — Rothermel core, fuel models, wind, moisture)
+  │     └── behave-crown (~1,700 loc — Scott & Reinhardt; owns Surface instances)
+  │           └── behave-spot (~620 loc)
+  ├── behave-weather   (~700 loc — RH, slope, VPD, fine dead fuel; standalone)
+  ├── behave-ignite    (~300 loc; standalone)
+  ├── behave-contain   (~1,400 loc — Fried & Fried sim; standalone)
+  ├── behave-mortality (~2,400 loc — incl. safety + separation)
+  └── behave-run       (facade; depends on all)
+#+end_example
+
+- No circular dependencies; Crown→Surface and Spot→Crown ordering matches the
+  domain coupling in the C++ (=Crown= drives two =Surface= runs).
+- Shared geometry (=fire_size=) and units live sensibly in =firelab-base=.
+
+** Completeness inventory
+
+All 41 C++ class pairs are accounted for. Notable mappings:
+
+| C++                              | Rust home                                  | Status |
+|----------------------------------+--------------------------------------------+--------|
+| =behaveRun= facade               | =behave-run/src/lib.rs= (134 loc)          | ⚠ skeleton — missing most input/output plumbing |
+| =safety.h=                       | =behave-mortality/src/safety.rs=           | ✓ |
+| =safeSeparationDistanceCalculator= | =behave-mortality/src/separation.rs=     | ✓ (27-entry table bit-exact) |
+| =windAdjustmentFactor= + =windSpeedUtility= | =behave-surface/src/wind.rs=    | ✓ (⚠ only 20ft→midflame conversion; 10m paths partial) |
+| =moistureScenarios=              | =behave-surface/src/moisture.rs=           | ✓ |
+| =randfuel= / =randthread=        | =behave-surface/src/exrate.rs=             | ✓ (no-extension path; =newext= unreachable, not ported) |
+| =fireSize=                       | =firelab-base/src/fire_size.rs=            | ✓ (stub duplicate at =behave-surface/src/fire_size.rs= — remove) |
+| =canopy_coefficient_table=       | =behave-mortality/src/canopy.rs=           | ✓ |
+| CLI/test clients (=testBehave.cpp= etc.) | —                                  | ✗ not ported (fine; but mine them for parity values) |
+
+** API design
+
+The port deliberately mirrors the C++ setter → =doCalculation()= → getter,
+mutable-state style for parity-testing purposes:
+
+- =SurfaceInputs::update_surface_inputs()= takes *20 parameters*
+  (=behave-surface/src/inputs.rs:175=) — flagged by clippy.
+- Calculation objects (=SurfaceFire=, =Crown=, …) mutate ~30+ =f64= fields on
+  =self= and expose getters, instead of returning an outputs struct.
+- Private fields + accessors (an improvement over C++ public members), unit-aware
+  getters via the conversion trait — good.
+- Bare =f64= everywhere; no unit newtypes. Matches C++, less type-safe.
+
+/Assessment/: acceptable as a "phase 1 parity port", but this mutable-state API
+is exactly what must change for parallel execution — see
+[[*Phase 0 — Pure-kernel refactor (prerequisite for everything)][Phase 0]].
+
+** Error handling
+
+- =BehaveError= exists (=firelab-base/src/error.rs=) but *no public API returns*
+  =Result= — inputs are silently clamped, exactly like the C++.
+- Zero =unsafe=, zero panics/unwraps in library code (unwraps confined to tests).
+- /Recommendation/: keep clamping semantics for parity, but expose a validating
+  constructor layer later (=TryFrom= for input structs) rather than threading
+  =Result= through the math.
+
+** Test strategy — the critical gap
+
+- 279 unit tests, all structural/behavioral; *none pin the golden reference
+  values* from =testBehave.cpp= (RUST_PORT.org documents 22+ such cases, e.g.
+  spread rate 19.677584 ch/hr for fuel model GS4).
+- Without golden parity tests, "numerical fidelity" rests on code inspection
+  alone — and the f32/GPU work later *requires* a trusted f64 baseline.
+- /Action/: create =crates/behave-run/tests/parity.rs= (or a =behave-parity=
+  test crate) exercising the full facade against C++ reference outputs;
+  additionally build the C++ once, dump a few thousand randomized input/output
+  vectors to CSV, and assert Rust matches within 1e-12 relative.
+
+* Fidelity Review by Crate
+
+** firelab-base — ✓ high fidelity
+- All conversion factors in =units.rs= verified against =behaveUnits.cpp= to full
+  precision (including the C++ quirk of *dividing* for pressure conversions —
+  preserved deliberately).
+- =fire_size.rs=: length-to-width ratio (=.936*exp(.1147*U)+.461*exp(-.0692*U)-.397=),
+  Ramanujan perimeter, backing spread rate — all exact matches.
+- Enum ordinals match C++ (=WindHeightInputMode=, =MoistureInputMode=, …).
+
+** behave-weather — ✓ high fidelity
+- Magnus dew-point branches (cold/warm), altitude pressure correction, and the
+  RH formula match =relativeHumidity.cpp= exactly; slope and VPD verified.
+
+** behave-mortality — ✓ high fidelity
+- *197 species records* in =species.rs= match =species_master_table.cpp=
+  (spot-checked ABAM, ACRU, QUVESTU…); GACC region indexing correct.
+- Bole char (10 equations) and bark factor (40 equations) coefficient tables exact.
+- Safety zone (4 × flame height; core radius formula) and the 27-entry safe
+  separation delta table are bit-exact.
+
+** behave-contain — ✓ highest-complexity module, verified line-matched
+- =do_step()= (=algorithm.rs:453=) matches =Contain.cpp:1226-1265= including the
+  head/rear-attack containment interpolation formulas.
+- Perimeter integration (trapezoidal + shoelace), uncontained-area accumulation,
+  resource retry logic (overrun → next arrival; step overflow → adjust
+  =dist_step=), and diurnal spread-rate rollover all verified.
+- /Correction/: the *adapter's* initial-attack geometry (outside the sim core)
+  had diverged from C++ — caught and fixed by the parity suite (see
+  [[*Parity suite results (2026-07-06)][Parity suite results]]).
+
+** behave-crown — ✓ production-quality fidelity
+- Rothermel (1991) and Scott & Reinhardt (2001) methods complete: ROS
+  multiplier 3.34, HOC 8000 Btu/lb, wind factor B =1.4308256324729873=,
+  propagating flux =0.048317062998571636= — bit-for-bit.
+- Surface-fuel clone/restore around the crown run and 20-ft↔10-m wind height
+  conversions match the C++ state dance exactly.
+
+** behave-spot — ✓ complete
+- All four sources (burning pile, surface, torching trees, crown); all 14
+  torching-tree species [a, b] flame-height coefficients bit-exact; pile
+  multiplier 12.2 and drift coefficient 0.000278 verified; flat and mountain
+  terrain paths identical (fixed 6-iteration refinement loop).
+
+** behave-ignite — ✓ complete, /intentionally better than C++/
+- All 8 fuel-bed types, firebrand + lightning (Latham) probability constants
+  verified.
+- *Two deliberate divergences fixing C++ bugs*:
+  1. =ignite.cpp:238= — =setMoistureHundredHour()= mistakenly writes the
+     one-hour field; Rust keeps the fields separate.
+  2. =ignite.cpp:310-320= — variable shadowing makes =isFuelDepthNeeded()=
+     always return =false=; Rust pattern-matches correctly.
+  ⇒ document these in code comments and *exclude these paths from exact-parity
+  assertions* (or assert against the corrected expectation).
+
+** Parity suite results (2026-07-06)
+
+=crates/behave-run/tests/parity.rs= mirrors =testBehave.cpp= exactly: one
+shared =BehaveRun=, same call order (some C++ tests depend on state left by
+earlier ones), C++ =roundToSixDecimalPlaces= reproduced, tolerance 1e-6.
+*154/154 checks pass.* What it found:
+
+1. *Special fuel models were NOT actually integrated* (contradicting the
+   fidelity review below): the chaparral / palmetto-gallberry / western-aspen
+   data modules existed with correct constants, but the fuelbed integration
+   paths were 15 =todo!()= panics in =behave-surface/src/fuelbed.rs=.
+   *Since ported* (2026-07-06): all 15 branches (depth, load, moisture, SAVR,
+   HOC, MOE, density, chaparral silica) plus the aspen mortality chain
+   (=fuelbed= → =SurfaceFire= → =Surface::get_aspen_mortality=) now mirror
+   the C++; the chaparral/palmetto/aspen golden checks passed on first run
+   and are folded into the main parity sequence. The last gap — the
+   two-fuel-models /TwoDimensional/ method — is *also now closed*: the EXRATE
+   package (=randfuel=/=randthread=) is ported as
+   =behave-surface/src/exrate.rs= (no-lateral-extension path, the only path
+   Behave exercises; the =newext= Extension machinery is documented as
+   unreachable and not ported). All 11 two-fuel golden coverage values
+   (8.876216 → 21.971217 ch/hr) matched on first run. *The parity suite now
+   runs with zero ignored tests* (171 checks).
+2. *Real divergence found & fixed*: =ContainAdapter= initial-attack geometry
+   (=adapter.rs=) had invented its own ellipse (a = rate, b = a/LW, Ramanujan-2
+   perimeter). The C++ derives an effective windspeed =4·(LW−1)=, runs it
+   through =FireSize= (yielding a different L/W via the Anderson formula), and
+   uses FireSize's perimeter/area. Observed error before the fix: fire size at
+   initial attack 2.0× too large, perimeter 1.55× too large. Now line-matched.
+3. *Quirk restored*: =slopeTool.cpp:140= converts the map distance to inches
+   as if it were in feet (ignores the units argument); the Rust port had
+   "fixed" this, but BehavePlus 6's published outputs bake the quirk in.
+   Restored with a comment.
+4. *Missing API added*: =Surface::backing_spread_distance= /
+   =flanking_spread_distance= (present in C++, absent from the facade).
+5. Aspen mortality (=getAspenMortality=) is unimplemented in Rust
+   (=fire.rs=, commented out) — its golden check is parked in the ignored
+   aspen test.
+6. C++ test-suite bugs documented in place: the moisture-class-needed checks
+   and the crown L/W + crown perimeter checks in =testBehave.cpp= compare
+   observed-to-observed (never actually asserted); the Rust suite asserts the
+   declared expected values, which all pass.
+
+** behave-surface — ✓ high fidelity for standard fuel models (see parity results above for special-model integration gaps)
+- Reaction intensity (Rothermel 1972): α=133.0, σ exponent 0.7913, η_m
+  coefficients [2.59, 5.11, 3.52], η_s =0.174·S^{-0.19}=, stability threshold
+  1e-6 — all exact.
+- Wind adjustment factor: Albini-Baughman /3.0, Finney π/12, unsheltered
+  [1.83, 0.36, 0.13], sheltered 0.555, 6.0 ft canopy height threshold — exact.
+- Fuel model tables complete: FM1–13, Scott & Burgan (GR/GS/SH/TU/TL/SB) with
+  the 2000/43560 load conversion, NB1–9, and the international/custom variants.
+  The known C++ quirk =TL5 savrLiveWoody = 160.0= (likely a typo for 1600 in
+  the original) is *preserved for parity*.
+- Special models verified: chaparral (MOE [0.3, 0.65], densities [46, 32], HOC
+  [8000, 10500], age/load coefficients, 5-class split), palmetto-gallberry
+  (all 7 regression equations), western aspen (curing interpolation, 5 models
+  × 6 curing levels).
+- All 16 moisture scenarios, two-fuel-model weighting (arithmetic, harmonic,
+  2-D expected), boundary conditions (< vs ≤), and =initialize_members()=
+  defaults match the C++.
+- Two /low/ findings, both favoring the Rust side:
+  1. =chaparral.rs:180-184= — C++ =setLiveFuelHeatOfCombustion/Moisture()=
+     write index [0] (dead) instead of [1] (live); Rust indexes correctly.
+     The C++ methods are dead code, so the defect never manifests. No action.
+  2. =moisture.rs:261-272= — D4 scenario /descriptions/ carry a C++ copy-paste
+     error ("D3L*" text); preserved deliberately for parity. Cosmetic.
+
+* Prioritized Findings
+
+| P  | Finding                                                                 | Where |
+|----+-------------------------------------------------------------------------+-------|
+| P0 | DONE — golden parity suite (171 checks, 0 ignored) landed               | =behave-run/tests/parity.rs= |
+| P0 | DONE — special-model fuelbed integration ported (was 15 =todo!()=)      | =behave-surface/src/fuelbed.rs= |
+| P0 | DONE — EXRATE ported; two-fuel /TwoDimensional/ works                   | =behave-surface/src/exrate.rs= |
+| P1 | DONE — aspen mortality ported                                           | =behave-surface/src/fire.rs= |
+| P1 | =behave-run= facade is a skeleton (no full input/output plumbing)       | =behave-run/src/lib.rs= |
+| P1 | Intentional C++ bug fixes in ignite are undocumented divergences        | =behave-ignite/src/inputs.rs= |
+| P2 | =wind.rs= wind-speed utility only covers 20ft→midflame                  | =behave-surface/src/wind.rs:140= |
+| P2 | Duplicate/stub =fire_size.rs= in behave-surface vs. firelab-base        | =behave-surface/src/fire_size.rs= |
+| P3 | 20-parameter input setters; mutable calculate-then-get API              | =behave-surface/src/inputs.rs:175= |
+| P3 | Bare =f64= (no unit newtypes); silent clamping instead of =Result=      | workspace-wide |
+
+* Parallelization Roadmap
+
+** Target workload
+
+Landscape-scale batch evaluation (FlamMap/ElmFire style): the *same* calculation
+over millions of independent cells, each cell = (fuel model, moistures ×7, wind
+speed/direction, slope/aspect, canopy). This is embarrassingly parallel across
+cells — the design question is purely about kernel shape and data layout.
+
+** Readiness facts (from code analysis)
+
+- *Purity*: no globals, no statics, no interior mutability anywhere in the
+  workspace. All state lives in owned structs (=Surface= ~2-3 KB incl. a cloned
+  256-entry fuel-model catalog; =SurfaceFire= ~400 B; =FuelbedIntermediates=
+  ~1 KB of fixed =[f64; 5]= / =[f64; 2]= arrays).
+- *Loop structure*: the surface hot path has only fixed-bound loops (5 size
+  classes × 2 life states); spot has a fixed 6-iteration refinement; crown is a
+  straight-line composition of two surface runs. Only *contain* has
+  variable-length simulation/retry loops.
+- *Branching*: main divergence is fuel-model dispatch (standard vs. chaparral /
+  palmetto-gallberry / western-aspen vs. two-fuel-models) in
+  =facade.rs:61-102=, plus cheap rejoining branches (wind limit, dynamic load
+  transfer).
+- *Transcendentals*: ~44 pow/exp/log/sqrt/trig sites; the wind-factor block
+  (=fire.rs:625-643=) alone has ~10. One surface run ≈ 1,200 raw flops but
+  transcendental-dominated ⇒ *strongly compute-bound* (~5000:1 flops per byte
+  of I/O). Ideal for SIMD/GPU; memory bandwidth is a non-issue.
+- *Tables*: fuel models (~10 KB × 256 entries), species (~20 KB) are static
+  data but currently *cloned into every* =Surface= — must become =&'static= /
+  shared / GPU storage buffers.
+- *Precision*: everything is =f64=. Most outputs (ROS, flame length) tolerate
+  f32; identified f32 risk spots: wind factor exponentials and the Byram scorch
+  formula (=fli^1.166667 / sqrt(fli + U³)= — cancellation risk).
+
+** Readiness matrix
+
+| Module      | rayon | SIMD  | GPU (WebGPU) |
+|-------------+-------+-------+--------------|
+| Surface     | easy  | medium (SoA refactor) | medium (divergence + f32) |
+| Crown       | easy  | medium | medium (two-stage kernel) |
+| Spot        | easy  | easy  | easy (fixed loops) |
+| Ignite      | easy  | easy  | easy |
+| Mortality   | easy  | medium (equation dispatch) | medium |
+| Weather     | easy  | easy  | easy |
+| Contain     | easy (per-run) | hard | *not worth it* — keep on CPU |
+
+** Phase 0 — Pure-kernel refactor (prerequisite for everything)
+
+The current API (=&mut self= setters → =do_surface_run…(&mut self)= → getters)
+blocks every parallel backend equally. Refactor *without touching the math*:
+
+1. Split each module into:
+   - =XInputs= — plain =Copy= struct (replace the =String= scenario name in
+     =SurfaceInputs= with an index/enum so the struct is =Copy= + =Pod=).
+   - =x_kernel(&XInputs, &Tables) -> XOutputs= — a *pure function*; internal
+     scratch (=FuelbedIntermediates=) becomes a stack-local, not a struct field.
+   - Keep the existing stateful =Surface=/=Crown= types as thin wrappers over
+     the kernel, preserving today's API and tests.
+2. Make tables =&'static=: =FuelModels= and species tables as =static= /
+   =LazyLock= data passed by reference — kills the 10 KB-per-instance clone and
+   is the same shape a GPU storage buffer needs.
+3. *Land the parity test suite first* (P0 above). Every later phase is validated
+   against this f64 golden baseline.
+
+Effort: the largest single chunk of work in the roadmap, but mechanical.
+
+** Phase 1 — rayon batch API (immediate win)
+
+#+begin_src rust
+pub fn run_surface_batch(cells: &[SurfaceInputs], tables: &Tables) -> Vec<SurfaceOutputs> {
+    cells.par_iter().map(|c| surface_kernel(c, tables)).collect()
+}
+#+end_src
+
+- ~100 loc once Phase 0 exists; results bit-identical to serial (assert in tests).
+- Expected: near-linear scaling (6–8× on 8 cores) because the kernel is
+  compute-bound with zero shared mutable state.
+- Ship this as the first =behave-batch= crate; it is already enough for most
+  raster workloads.
+
+** Phase 2 — SIMD (CPU vectorization)
+
+- Add an SoA batch layout: =struct SurfaceBatch { wind_speed: Vec<f64>, slope:
+  Vec<f64>, … }= (one =Vec= per input field), processed in chunks of the lane
+  width via =std::simd= (portable, nightly) or the =wide= crate (stable).
+- Handle divergence by *sorting/grouping cells by fuel-model kind* before
+  vectorizing — lanes within a chunk then share the code path, which is both
+  simpler and faster than per-lane masking. Standard fuel models dominate real
+  landscapes, so special models (chaparral/palmetto/aspen, two-fuel) can fall
+  back to the scalar kernel initially.
+- Transcendentals: use =sleef=-style vectorized math (=wide= provides
+  =exp=/=pow= approximations; validate against parity suite with a stated
+  tolerance, e.g. ≤1e-10 relative).
+- Compose with rayon: =par_chunks= over the SoA batch — SIMD within a chunk,
+  threads across chunks. Combined 30–80× over scalar single-thread is realistic
+  for the surface kernel.
+
+** Phase 3 — GPU via WebGPU (wgpu + WGSL compute)
+
+- *Precision first*: WGSL has no =f64=. Before writing any shader, run an f32
+  sensitivity study on CPU — re-run the parity corpus with the kernel compiled
+  for =f32= (make the kernel generic over =T: Float=; this falls out of Phase 0)
+  and measure error distribution per output. Expect most outputs within ~0.1–2%;
+  decide acceptability per-output. Mitigations where needed: algebraic
+  rearrangement of the scorch/wind formulas, compensated summation, or keeping
+  those outputs CPU-side.
+- *Kernel design*:
+  - Inputs as SoA storage buffers (coalesced access); fuel-model + species
+    tables uploaded once as read-only storage buffers.
+  - One dispatch per fuel-model *kind* (standard / chaparral / palmetto / aspen
+    / two-fuel) over pre-grouped cell index lists — eliminates warp divergence
+    instead of paying for it. The grouping pre-pass is a trivial CPU bucket sort.
+  - Surface → crown → spot as a small kernel pipeline sharing intermediate
+    buffers (crown needs two surface evaluations: reuse the surface kernel with
+    crown-standard inputs).
+- =wgpu= gives native (Vulkan/Metal/DX12) + browser (WASM + WebGPU) from one
+  codebase — aligns with a WASM build of the Rust library for web clients.
+- Fixed-bound loops in surface/spot/ignite make kernels statically schedulable;
+  *contain stays on CPU* (variable-length simulation with retry/rerun control
+  flow — a poor GPU fit and never a per-cell raster workload anyway).
+
+** Why not BLAS
+
+The Rothermel model is *not linear algebra*: it is a scalar, branchy,
+transcendental-heavy computation per cell with 5-element weighted sums. There
+are no matrix products or factorizations to hand to BLAS, and reshaping the
+math into GEMM form would add memory traffic without exploiting BLAS's
+strengths. The right abstraction is *batched elementwise kernels* (map over
+cells), which is exactly what rayon/SIMD/WGSL provide. If a future need arises
+for large linear solves (e.g. fire-spread PDEs on rasters), that is a new
+algorithm layer, not this library.
+
+** Precision strategy (f32 vs f64)
+
+| Output                    | f32 OK? | Notes |
+|---------------------------+---------+-------|
+| Spread rate, flame length | yes     | 2% tolerance typical for downstream use |
+| Reaction intensity        | yes     |       |
+| Wind factor φ_w           | verify  | small exponents; error amplifies into ROS |
+| Scorch height (Byram)     | verify  | =sqrt(fli + U³)= cancellation risk |
+| Contain sim               | keep f64 | iterative accumulation on CPU anyway |
+
+Keep =f64= as the reference implementation forever; f32 is a deployment
+option validated against it, never the source of truth.
+
+** Suggested sequence
+
+1. Parity test suite (P0) — golden values from =testBehave.cpp= *(DONE:
+   =behave-run/tests/parity.rs=, 154 checks)*; still worthwhile: a randomized
+   C++↔Rust corpus for broader input coverage, and porting the fuelbed
+   =todo!()=s so the four ignored parity sections can be enabled.
+2. Phase 0 pure-kernel refactor (=Copy= inputs, static tables, kernel fns) —
+   keep old API as wrapper; all 279 tests + parity suite must stay green.
+3. Phase 1 =behave-batch= crate with rayon (=par_iter=). Benchmark with
+   =criterion= to establish the scalar/threaded baseline.
+4. Make kernels generic over =f32=/=f64=; run the f32 sensitivity study.
+5. Phase 2 SoA + SIMD for the surface kernel (grouped by fuel-model kind).
+6. Phase 3 wgpu compute pipeline (surface first, then crown/spot chained),
+   native + WASM targets.
+
+* Appendix: Baseline
+
+- Branch =rj-rust-port=; =cargo build --workspace= clean; 279/279 tests pass.
+- C++ reference: =src/behave/= @ =a4dc3a0= lineage (see =ARCH.org= for the C++
+  architecture map, =RUST_PORT.org= for the porting roadmap this work followed).

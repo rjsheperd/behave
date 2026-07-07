@@ -260,10 +260,10 @@ impl SurfaceFire {
         self.calculate_flame_lengths();
 
         // Western Aspen mortality (if applicable)
-        // Note: western aspen module not yet ported, so this is a stub
-        // if inputs.is_using_western_aspen() {
-        //     self.fuelbed.calculate_western_aspen_mortality(self.forward_flame_length);
-        // }
+        if inputs.is_using_western_aspen() {
+            self.fuelbed
+                .calculate_western_aspen_mortality(inputs, self.forward_flame_length);
+        }
 
         self.max_flame_length = self.forward_flame_length; // Used by SAFETY module
         self.calculate_heat_source();
@@ -398,6 +398,11 @@ impl SurfaceFire {
 
     pub fn flame_length(&self) -> f64 {
         self.forward_flame_length
+    }
+
+    /// C++ method: `getAspenMortality` (fraction)
+    pub fn aspen_mortality(&self) -> f64 {
+        self.fuelbed.aspen_mortality()
     }
 
     pub fn backing_flame_length(&self) -> f64 {

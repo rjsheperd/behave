@@ -7,12 +7,15 @@
 //! C++ source: surfaceFuelbedIntermediates.h / surfaceFuelbedIntermediates.cpp
 
 use firelab_base::{
-    FractionUnits, FuelConstants, FuelLifeState, HeatOfCombustionUnits, LengthUnits, LoadingUnits,
-    MoistureInputMode, SurfaceAreaToVolumeUnits, UnitConversion,
+    BasalAreaUnits, FractionUnits, FuelConstants, FuelLifeState, HeatOfCombustionUnits,
+    LengthUnits, LoadingUnits, MoistureInputMode, SurfaceAreaToVolumeUnits, UnitConversion,
 };
 
+use crate::chaparral::{ChaparralFuel, ChaparralFuelLoadInputMode, CHAPARRAL_NUM_FUEL_CLASSES};
 use crate::fuel_models::FuelModels;
 use crate::inputs::SurfaceInputs;
+use crate::palmetto_gallberry::PalmettoGallberry;
+use crate::western_aspen::WesternAspen;
 
 const MAX_LIFE: usize = FuelConstants::MAX_LIFE_STATES;
 const MAX_P: usize = FuelConstants::MAX_PARTICLES;
@@ -53,6 +56,12 @@ pub struct FuelbedIntermediates {
     moisture_of_extinction: [f64; MAX_LIFE],
     fraction_of_total_surface_area: [f64; MAX_LIFE],
     total_load_for_life_state: [f64; MAX_LIFE],
+
+    // Special fuel model helpers (C++ members chaparralFuel_,
+    // palmettoGallberry_, westernAspen_)
+    chaparral_fuel: ChaparralFuel,
+    palmetto_gallberry: PalmettoGallberry,
+    western_aspen: WesternAspen,
 
     // Scalar intermediates
     fuel_model_number: i32,
@@ -97,6 +106,10 @@ impl FuelbedIntermediates {
             moisture_of_extinction: [0.0; MAX_LIFE],
             fraction_of_total_surface_area: [0.0; MAX_LIFE],
             total_load_for_life_state: [0.0; MAX_LIFE],
+
+            chaparral_fuel: ChaparralFuel::new(),
+            palmetto_gallberry: PalmettoGallberry::new(),
+            western_aspen: WesternAspen::new(),
 
             fuel_model_number: 0,
             depth: 0.0,
@@ -247,6 +260,11 @@ impl FuelbedIntermediates {
 
         self.depth = 0.0;
         self.relative_packing_ratio = 0.0;
+        // C++ initializeMembers resets palmettoGallberry_ and westernAspen_
+        // but deliberately not chaparralFuel_.
+        self.palmetto_gallberry = PalmettoGallberry::new();
+        self.western_aspen = WesternAspen::new();
+
         self.fuel_model_number = 0;
         self.sigma = 0.0;
         self.bulk_density = 0.0;
@@ -290,11 +308,15 @@ impl FuelbedIntermediates {
 
     fn set_fuelbed_depth(&mut self, fuel_models: &FuelModels, surface_inputs: &SurfaceInputs) {
         if surface_inputs.is_using_palmetto_gallberry() {
-            todo!("Palmetto-Gallberry fuelbed depth not yet ported");
+            let height_of_understory =
+                surface_inputs.palmetto_gallberry_height_of_understory(LengthUnits::Feet);
+            self.depth = self.palmetto_gallberry.calculate_fuel_bed_depth(height_of_understory);
         } else if surface_inputs.is_using_western_aspen() {
-            todo!("Western Aspen fuelbed depth not yet ported");
+            self.depth =
+                WesternAspen::get_aspen_fuel_bed_depth(surface_inputs.aspen_fuel_model_number());
         } else if surface_inputs.is_using_chaparral() {
             self.depth = surface_inputs.chaparral_fuel_bed_depth(LengthUnits::Feet);
+            self.chaparral_fuel.set_depth(self.depth);
         } else {
             self.depth = fuel_models.fuelbed_depth(self.fuel_model_number, LengthUnits::Feet);
         }
@@ -302,11 +324,70 @@ impl FuelbedIntermediates {
 
     fn set_fuel_load(&mut self, fuel_models: &FuelModels, surface_inputs: &SurfaceInputs) {
         if surface_inputs.is_using_palmetto_gallberry() {
-            todo!("Palmetto-Gallberry fuel load not yet ported");
+            let age = surface_inputs.palmetto_gallberry_age_of_rough();
+            let height =
+                surface_inputs.palmetto_gallberry_height_of_understory(LengthUnits::Feet);
+            let coverage =
+                surface_inputs.palmetto_gallberry_palmetto_coverage(FractionUnits::Fraction);
+            let basal_area = surface_inputs
+                .palmetto_gallberry_overstory_basal_area(BasalAreaUnits::SquareFeetPerAcre);
+
+            let pg = &mut self.palmetto_gallberry;
+            self.load_dead[0] = pg.calculate_dead_fine_fuel_load(age, height);
+            self.load_dead[1] = pg.calculate_dead_medium_fuel_load(age, coverage);
+            self.load_dead[2] = pg.calculate_dead_foliage_fuel_load(age, coverage);
+            self.load_dead[3] = pg.calculate_litter_load(age, basal_area);
+            self.load_dead[4] = 0.0;
+
+            self.load_live[0] = pg.calculate_live_fine_fuel_load(age, height);
+            self.load_live[1] = pg.calculate_live_medium_fuel_load(age, height);
+            self.load_live[2] = pg.calculate_live_foliage_load(age, coverage, height);
+            self.load_live[3] = 0.0;
+            self.load_live[4] = 0.0;
+
+            for i in 0..MAX_P {
+                self.silica_effective_live[i] = 0.015;
+            }
         } else if surface_inputs.is_using_western_aspen() {
-            todo!("Western Aspen fuel load not yet ported");
+            let model = surface_inputs.aspen_fuel_model_number();
+            let curing = surface_inputs.aspen_curing_level(FractionUnits::Fraction);
+
+            let wa = &mut self.western_aspen;
+            self.load_dead[0] = wa.calculate_load_dead_one_hour(model, curing);
+            self.load_dead[1] = wa.calculate_load_dead_ten_hour(model);
+            self.load_dead[2] = 0.0;
+            self.load_dead[3] = 0.0;
+            self.load_dead[4] = 0.0;
+
+            self.load_live[0] = wa.calculate_load_live_herbaceous(model, curing);
+            self.load_live[1] = wa.calculate_load_live_woody(model, curing);
+            self.load_live[2] = 0.0;
+            self.load_live[3] = 0.0;
+            self.load_live[4] = 0.0;
         } else if surface_inputs.is_using_chaparral() {
-            todo!("Chaparral fuel load not yet ported");
+            let input_mode = surface_inputs.chaparral_fuel_load_input_mode();
+
+            self.chaparral_fuel
+                .set_dead_fuel_fraction(surface_inputs.chaparral_fuel_dead_load_fraction());
+
+            match input_mode {
+                ChaparralFuelLoadInputMode::DirectFuelLoad => {
+                    self.chaparral_fuel.set_total_fuel_load(
+                        surface_inputs.chaparral_total_fuel_load(LoadingUnits::PoundsPerSquareFoot),
+                    );
+                    self.chaparral_fuel.update_fuel_load_from_depth_and_dead_fuel_fraction();
+                }
+                ChaparralFuelLoadInputMode::FuelLoadFromDepthAndChaparralType => {
+                    self.chaparral_fuel
+                        .set_chaparral_fuel_type(surface_inputs.chaparral_fuel_type());
+                    self.chaparral_fuel.set_depth(self.depth);
+                    self.chaparral_fuel.update_fuel_load_from_depth_and_fuel_type();
+                }
+            }
+            for i in 0..MAX_P {
+                self.load_dead[i] = self.chaparral_fuel.get_load(FuelLifeState::Dead, i);
+                self.load_live[i] = self.chaparral_fuel.get_load(FuelLifeState::Live, i);
+            }
         } else {
             let n = self.fuel_model_number;
             let u = LoadingUnits::PoundsPerSquareFoot;
@@ -348,9 +429,31 @@ impl FuelbedIntermediates {
 
     fn set_moisture_content(&mut self, surface_inputs: &SurfaceInputs) {
         if surface_inputs.is_using_chaparral() {
-            todo!("Chaparral moisture content not yet ported");
+            let f = FractionUnits::Fraction;
+            self.moisture_dead[0] = surface_inputs.moisture_one_hour(f);
+            self.moisture_dead[1] = surface_inputs.moisture_ten_hour(f);
+            self.moisture_dead[2] = surface_inputs.moisture_ten_hour(f);
+            self.moisture_dead[3] = surface_inputs.moisture_hundred_hour(f);
+            self.moisture_dead[4] = 0.0;
+
+            self.moisture_live[0] = surface_inputs.moisture_live_herbaceous(f);
+            self.moisture_live[1] = surface_inputs.moisture_live_woody(f);
+            self.moisture_live[2] = surface_inputs.moisture_live_woody(f);
+            self.moisture_live[3] = surface_inputs.moisture_live_woody(f);
+            self.moisture_live[4] = surface_inputs.moisture_live_woody(f);
         } else if surface_inputs.is_using_palmetto_gallberry() {
-            todo!("Palmetto-Gallberry moisture content not yet ported");
+            let f = FractionUnits::Fraction;
+            self.moisture_dead[0] = surface_inputs.moisture_one_hour(f);
+            self.moisture_dead[1] = surface_inputs.moisture_ten_hour(f);
+            self.moisture_dead[2] = surface_inputs.moisture_one_hour(f);
+            self.moisture_dead[3] = surface_inputs.moisture_hundred_hour(f);
+            self.moisture_dead[4] = 0.0;
+
+            self.moisture_live[0] = surface_inputs.moisture_live_woody(f);
+            self.moisture_live[1] = surface_inputs.moisture_live_woody(f);
+            self.moisture_live[2] = surface_inputs.moisture_live_herbaceous(f);
+            self.moisture_live[3] = 0.0;
+            self.moisture_live[4] = 0.0;
         } else {
             // Standard fuel models
             for i in 0..MAX_P {
@@ -375,11 +478,39 @@ impl FuelbedIntermediates {
 
     fn set_savr(&mut self, fuel_models: &FuelModels, surface_inputs: &SurfaceInputs) {
         if surface_inputs.is_using_palmetto_gallberry() {
-            todo!("Palmetto-Gallberry SAVR not yet ported");
+            // Special values for Palmetto-Gallberry
+            self.savr_dead[0] = 350.0;
+            self.savr_dead[1] = 140.0;
+            self.savr_dead[2] = 2000.0;
+            self.savr_dead[3] = 2000.0; // C++ TODO: find appropriate savr for litter
+            self.savr_dead[4] = 0.0;
+
+            self.savr_live[0] = 350.0;
+            self.savr_live[1] = 140.0;
+            self.savr_live[2] = 2000.0;
+            self.savr_live[3] = 0.0;
+            self.savr_live[4] = 0.0;
         } else if surface_inputs.is_using_western_aspen() {
-            todo!("Western Aspen SAVR not yet ported");
+            let model = surface_inputs.aspen_fuel_model_number();
+            let curing = surface_inputs.aspen_curing_level(FractionUnits::Fraction);
+
+            let wa = &mut self.western_aspen;
+            self.savr_dead[0] = wa.calculate_savr_dead_one_hour(model, curing);
+            self.savr_dead[1] = wa.calculate_savr_dead_ten_hour();
+            self.savr_dead[2] = 0.0;
+            self.savr_dead[3] = 0.0;
+            self.savr_dead[4] = 0.0;
+
+            self.savr_live[0] = wa.calculate_savr_live_herbaceous();
+            self.savr_live[1] = wa.calculate_savr_live_woody(model, curing);
+            self.savr_live[2] = 0.0;
+            self.savr_live[3] = 0.0;
+            self.savr_live[4] = 0.0;
         } else if surface_inputs.is_using_chaparral() {
-            todo!("Chaparral SAVR not yet ported");
+            for i in 0..CHAPARRAL_NUM_FUEL_CLASSES {
+                self.savr_dead[i] = self.chaparral_fuel.get_savr(FuelLifeState::Dead, i);
+                self.savr_live[i] = self.chaparral_fuel.get_savr(FuelLifeState::Live, i);
+            }
         } else {
             let n = self.fuel_model_number;
             let u = SurfaceAreaToVolumeUnits::SquareFeetOverCubicFeet;
@@ -411,18 +542,30 @@ impl FuelbedIntermediates {
     fn set_heat_of_combustion(&mut self, fuel_models: &FuelModels, surface_inputs: &SurfaceInputs) {
         const NUM_LIVE_HC_CLASSES: usize = 3;
 
+        let mut hc_dead = 0.0;
+        let mut hc_live = 0.0;
+
         if surface_inputs.is_using_palmetto_gallberry() {
-            todo!("Palmetto-Gallberry heat of combustion not yet ported");
+            hc_dead = self.palmetto_gallberry.get_heat_of_combustion_dead();
+            hc_live = self.palmetto_gallberry.get_heat_of_combustion_live();
         } else if surface_inputs.is_using_western_aspen() {
-            todo!("Western Aspen heat of combustion not yet ported");
+            hc_dead = WesternAspen::get_aspen_heat_of_combustion_dead();
+            hc_live = WesternAspen::get_aspen_heat_of_combustion_live();
         } else if surface_inputs.is_using_chaparral() {
-            todo!("Chaparral heat of combustion not yet ported");
+            for i in 0..MAX_P {
+                self.heat_of_combustion_dead[i] =
+                    self.chaparral_fuel.get_heat_of_combustion(FuelLifeState::Dead, i);
+                self.heat_of_combustion_live[i] =
+                    self.chaparral_fuel.get_heat_of_combustion(FuelLifeState::Live, i);
+            }
         } else {
             let n = self.fuel_model_number;
             let u = HeatOfCombustionUnits::BtusPerPound;
-            let hc_dead = fuel_models.heat_of_combustion_dead(n, u);
-            let hc_live = fuel_models.heat_of_combustion_live(n, u);
+            hc_dead = fuel_models.heat_of_combustion_dead(n, u);
+            hc_live = fuel_models.heat_of_combustion_live(n, u);
+        }
 
+        if !surface_inputs.is_using_chaparral() {
             for i in 0..MAX_P {
                 self.heat_of_combustion_dead[i] = hc_dead;
                 self.heat_of_combustion_live[i] =
@@ -437,11 +580,14 @@ impl FuelbedIntermediates {
         surface_inputs: &SurfaceInputs,
     ) {
         if surface_inputs.is_using_palmetto_gallberry() {
-            todo!("Palmetto-Gallberry moisture of extinction not yet ported");
+            self.moisture_of_extinction[DEAD] =
+                self.palmetto_gallberry.get_moisture_of_extinction_dead();
         } else if surface_inputs.is_using_western_aspen() {
-            todo!("Western Aspen moisture of extinction not yet ported");
+            self.moisture_of_extinction[DEAD] =
+                WesternAspen::get_aspen_moisture_of_extinction_dead();
         } else if surface_inputs.is_using_chaparral() {
-            todo!("Chaparral moisture of extinction not yet ported");
+            self.moisture_of_extinction[DEAD] =
+                self.chaparral_fuel.get_dead_moisture_of_extinction();
         } else {
             self.moisture_of_extinction[DEAD] = fuel_models
                 .moisture_of_extinction_dead(self.fuel_model_number, FractionUnits::Fraction);
@@ -508,7 +654,12 @@ impl FuelbedIntermediates {
                 self.fuel_density_live[i] = 46.0;
             }
         } else if surface_inputs.is_using_chaparral() {
-            todo!("Chaparral density not yet ported");
+            for i in 0..MAX_P {
+                self.fuel_density_dead[i] =
+                    self.chaparral_fuel.get_density(FuelLifeState::Dead, i);
+                self.fuel_density_live[i] =
+                    self.chaparral_fuel.get_density(FuelLifeState::Live, i);
+            }
         }
         // else: default density 32.0 already set in initialize_members
 
@@ -615,6 +766,15 @@ impl FuelbedIntermediates {
             self.total_silica_content = 0.030;
         } else if surface_inputs.is_using_chaparral() || surface_inputs.is_using_western_aspen() {
             self.total_silica_content = 0.055;
+        }
+
+        if surface_inputs.is_using_chaparral() {
+            for i in 0..CHAPARRAL_NUM_FUEL_CLASSES {
+                self.silica_effective_dead[i] =
+                    self.chaparral_fuel.get_effective_silica(FuelLifeState::Dead, i);
+                self.silica_effective_live[i] =
+                    self.chaparral_fuel.get_effective_silica(FuelLifeState::Live, i);
+            }
         }
 
         let moisture_input_mode = surface_inputs.moisture_input_mode();
@@ -753,6 +913,24 @@ impl FuelbedIntermediates {
                 .exp()
                 / (192.0 + 0.2595 * self.sigma);
         }
+    }
+
+    /// C++ method: `calculateWesternAspenMortality`
+    pub fn calculate_western_aspen_mortality(
+        &mut self,
+        surface_inputs: &SurfaceInputs,
+        flame_length: f64,
+    ) {
+        self.western_aspen.calculate_mortality(
+            surface_inputs.aspen_fire_severity(),
+            flame_length,
+            surface_inputs.aspen_dbh(LengthUnits::Inches),
+        );
+    }
+
+    /// C++ method: `getAspenMortality` (fraction)
+    pub fn aspen_mortality(&self) -> f64 {
+        self.western_aspen.get_aspen_mortality()
     }
 }
 
