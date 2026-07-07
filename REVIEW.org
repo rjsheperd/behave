@@ -21,7 +21,7 @@ architecture review, one parallelization-readiness analysis) found:
   DAG; zero =unsafe=, zero panics in library code.
 - *The single biggest gap was verification, not code*: 279 unit tests but no
   golden-value parity tests. *Now addressed*: =crates/behave-run/tests/parity.rs=
-  replays the full =testBehave.cpp= sequence (154 golden checks, all passing).
+  replays the full =testBehave.cpp= sequence (171 runtime golden checks, all passing).
   Landing it immediately exposed and corrected review findings — see
   [[*Parity suite results (2026-07-06)][Parity suite results]].
 - The port *intentionally fixes two C++ bugs* in =ignite= (see

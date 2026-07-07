@@ -1339,6 +1339,15 @@ fn new_behave_run() -> BehaveRun {
 }
 
 fn finish(t: TestInfo) {
+    // Always report the runtime check count (visible with `-- --nocapture`).
+    // Note: this exceeds the static call-site count because several
+    // sites run in loops (two-fuel coverages, speed units, VPD, slope tool).
+    eprintln!(
+        "parity: {} checks executed, {} passed, {} failed",
+        t.failures.len() + t.passed,
+        t.passed,
+        t.failures.len(),
+    );
     assert!(
         t.failures.is_empty(),
         "{} of {} parity checks failed:\n{}",
